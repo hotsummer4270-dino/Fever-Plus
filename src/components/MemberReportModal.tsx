@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { X, Dumbbell, Award, Flame, Calendar, Sparkles, Share2, Printer, Heart } from 'lucide-react';
 import { Member, ClassLog, CoursePack } from '../types';
 import { formatCurrency, formatDateTime } from '../utils';
+import DefaultAvatar from './DefaultAvatar';
 
 interface MemberReportModalProps {
   isOpen: boolean;
@@ -120,7 +121,7 @@ export default function MemberReportModal({
                 <Dumbbell className="h-4 w-4 text-white stroke-[2.5]" />
               </div>
               <div>
-                <h4 className="text-xs font-bold text-slate-850 tracking-wide">L&H Studio</h4>
+                <h4 className="text-xs font-bold text-slate-850 tracking-wide">Fever Plus</h4>
                 <span className="text-[8px] text-slate-400 font-mono font-extrabold">POWERED BY LIWANG & HUAHUA</span>
               </div>
             </div>
@@ -133,13 +134,11 @@ export default function MemberReportModal({
           {/* Member Card Hero */}
           <div className="bg-white border border-slate-150 p-4 rounded-2xl mb-5 relative z-10 shadow-sm">
             <div className="flex items-center gap-3">
-              <div className="h-12 w-12 bg-indigo-50 rounded-xl border border-indigo-100 flex items-center justify-center text-lg font-bold text-indigo-700">
-                {member.name[0]}
-              </div>
+              <DefaultAvatar name={member.name} className="h-12 w-12" />
               <div>
                 <h2 className="text-sm font-bold text-slate-850">{member.name}</h2>
                 <span className="text-[10px] text-slate-600 block mt-0.5">
-                  已累计在 L&H 训练了 <b className="text-indigo-600 font-mono text-xs font-black">{totalClassesCompleted}</b> 节私教课
+                  已累计在 Fever Plus 训练了 <b className="text-indigo-600 font-mono text-xs font-black">{totalClassesCompleted}</b> 节私教课
                 </span>
               </div>
             </div>
@@ -204,7 +203,7 @@ export default function MemberReportModal({
           {/* Poster Footer (Branding) */}
           <div className="border-t border-slate-200 pt-4 text-center relative z-10">
             <span className="text-[8px] text-slate-400 uppercase tracking-widest font-mono font-bold">
-              - 汗水不会欺骗你 • L&H STUDIO -
+              - 汗水不会欺骗你 • FEVER PLUS -
             </span>
             <p className="text-[7px] text-slate-500 mt-0.5 font-medium">
               地址：朝阳区私教能量一号店 • 电话：138-1234-5678

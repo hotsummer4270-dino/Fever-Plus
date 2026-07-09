@@ -21,6 +21,7 @@ import {
 import { GymState, Member, ClassLog, CoursePack, PaymentLog, TrainingPlan, PlanDay, Exercise } from '../types';
 import { formatCurrency, formatDateTime, generateId } from '../utils';
 import DefaultAvatar from './DefaultAvatar';
+import TrainingActivityMap from './TrainingActivityMap';
 
 interface MemberDetailScreenProps {
   memberId: string;
@@ -303,6 +304,9 @@ export default function MemberDetailScreen({
           </div>
         </div>
       </div>
+
+      {/* Training Activity Grid Map */}
+      <TrainingActivityMap classLogs={memberClassLogs} joinDate={member.joinDate} />
 
       {/* Sub Tabs Navigation */}
       <div className="border-b border-slate-200 flex gap-4">

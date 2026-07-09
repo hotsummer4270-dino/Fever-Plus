@@ -69,7 +69,7 @@ export default function DataBackupScreen({ state, onUpdateState }: DataBackupScr
           数据安全与备份中心 (MVP 10)
         </h2>
         <p className="text-xs text-slate-500 mt-2 leading-relaxed font-medium">
-          为了确保您的私教工作室数据永不丢失，L&H 工作台采用了完全保存在本地的加密存储策略。
+          为了确保您的私教工作室数据永不丢失，Fever Plus 工作台采用了完全保存在本地的加密存储策略。
           我们建议您每周或在记录了重大缴费后，在此模块下载一份备份文件保存到个人电脑或网盘中，以防浏览器缓存被恶意清理。
         </p>
       </div>
