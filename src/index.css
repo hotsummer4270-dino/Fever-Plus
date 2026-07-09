@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "Fira Code", monospace;
+
+  /* Custom Warm Forest Green (暖石) palette mapping */
+  --color-brand-primary: #1F4538;
+  --color-brand-secondary: #5D9275;
+  --color-brand-bg: #F7F6F2;
+  --color-brand-surface: #FFFFFF;
+  --color-brand-text: #202824;
+
+  /* Map Indigo -> Warm Forest Green/Sage Green so that all components auto-theme beautifully */
+  --color-indigo-50: #F4F8F6;
+  --color-indigo-100: #E4EFE9;
+  --color-indigo-200: #CBE0D5;
+  --color-indigo-300: #A4C4B4;
+  --color-indigo-400: #7BA28F;
+  --color-indigo-500: #5D9275;
+  --color-indigo-600: #1F4538;
+  --color-indigo-700: #18372C;
+  --color-indigo-800: #132D24;
+  --color-indigo-900: #0E221B;
+
+  /* Map Slate/Gray -> Warm Cream and Charcoal */
+  --color-slate-50: #FAF9F6;
+  --color-slate-100: #F7F6F2; /* Warm sand background */
+  --color-slate-200: #EBEAE4; /* Warm sand border */
+  --color-slate-300: #DBDAD1;
+  --color-slate-400: #B0AF9F;
+  --color-slate-500: #8C8B7C;
+  --color-slate-650: #6B6A5D;
+  --color-slate-600: #6B6A5D;
+  --color-slate-700: #525146;
+  --color-slate-800: #3B3A32;
+  --color-slate-900: #202824; /* Deep charcoal text */
+}
+
+/* Print utility for clean report printing */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #report-poster, #report-poster * {
+    visibility: visible;
+  }
+  #report-poster {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    border: none !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+}

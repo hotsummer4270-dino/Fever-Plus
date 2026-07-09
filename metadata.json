@@ -1,0 +1,6 @@
+{
+  "name": "健身工作室管理系统",
+  "description": "一个面向私教健身工作室的轻量级全能管理系统。支持学员管理、课包绑定、消课登记、收学费财务对账、定制训练计划、生成微信朋友圈分享报告、以及本地数据安全备份导出功能。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
