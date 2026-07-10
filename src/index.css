@@ -1,15 +1,14 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", sans-serif;
-  --font-mono: "Fira Code", monospace;
+  --font-sans: "PingFang SC", "Microsoft YaHei", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 
   /* Custom Warm Forest Green (暖石) palette mapping */
   --color-brand-primary: #1F4538;
   --color-brand-secondary: #5D9275;
-  --color-brand-bg: #F7F6F2;
+  --color-brand-bg: #F6F8F7;
   --color-brand-surface: #FFFFFF;
   --color-brand-text: #202824;
 
@@ -21,22 +20,67 @@
   --color-indigo-400: #7BA28F;
   --color-indigo-500: #5D9275;
   --color-indigo-600: #1F4538;
+  --color-indigo-650: #1C3E33;
   --color-indigo-700: #18372C;
+  --color-indigo-750: #152F27;
   --color-indigo-800: #132D24;
   --color-indigo-900: #0E221B;
 
-  /* Map Slate/Gray -> Warm Cream and Charcoal */
-  --color-slate-50: #FAF9F6;
-  --color-slate-100: #F7F6F2; /* Warm sand background */
-  --color-slate-200: #EBEAE4; /* Warm sand border */
-  --color-slate-300: #DBDAD1;
-  --color-slate-400: #B0AF9F;
-  --color-slate-500: #8C8B7C;
-  --color-slate-650: #6B6A5D;
-  --color-slate-600: #6B6A5D;
-  --color-slate-700: #525146;
-  --color-slate-800: #3B3A32;
-  --color-slate-900: #202824; /* Deep charcoal text */
+  /* Neutral surfaces keep the operational UI crisp and readable. */
+  --color-slate-25: #FCFDFC;
+  --color-slate-50: #F8FAF9;
+  --color-slate-55: #F6F8F7;
+  --color-slate-100: #F0F3F1;
+  --color-slate-150: #E9EDEA;
+  --color-slate-200: #E1E6E3;
+  --color-slate-250: #D7DDD9;
+  --color-slate-300: #CBD2CE;
+  --color-slate-350: #B6C0BA;
+  --color-slate-400: #98A39C;
+  --color-slate-450: #87938B;
+  --color-slate-455: #828E86;
+  --color-slate-500: #6F7B73;
+  --color-slate-550: #626E66;
+  --color-slate-600: #566159;
+  --color-slate-650: #4B554E;
+  --color-slate-655: #48524B;
+  --color-slate-700: #3F4942;
+  --color-slate-750: #343D37;
+  --color-slate-800: #29322D;
+  --color-slate-850: #202923;
+  --color-slate-900: #17201B;
+
+  --color-amber-650: #B45309;
+  --color-blue-750: #1D4ED8;
+  --color-rose-650: #E11D48;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--color-slate-50);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--color-slate-50);
+  color: var(--color-slate-900);
+  line-height: 1.5;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button:disabled {
+  cursor: not-allowed;
 }
 
 /* Print utility for clean report printing */

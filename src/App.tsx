@@ -8,8 +8,7 @@ import {
   Database, 
   LogOut, 
   Menu, 
-  X,
-  Heart
+  X
 } from 'lucide-react';
 import { loadGymState, saveGymState } from './utils';
 import { GymState, Coach } from './types';
@@ -47,6 +46,7 @@ export default function App() {
 
   // Quick Action Modal states
   const [isLogClassOpen, setIsLogClassOpen] = useState(false);
+  const [logClassMemberId, setLogClassMemberId] = useState<string | undefined>();
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
   const [isLogPaymentOpen, setIsLogPaymentOpen] = useState(false);
 
@@ -72,6 +72,16 @@ export default function App() {
     setGymState(newState);
   };
 
+  const openLogClass = (memberId?: string) => {
+    setLogClassMemberId(memberId);
+    setIsLogClassOpen(true);
+  };
+
+  const closeLogClass = () => {
+    setIsLogClassOpen(false);
+    setLogClassMemberId(undefined);
+  };
+
   // If not logged in, render beautiful login gate
   if (!isLoggedIn) {
     return <LoginScreen onLogin={handleLogin} />;
@@ -79,19 +89,19 @@ export default function App() {
 
   // Sidebar Menu item lists
   const navigationItems = [
-    { key: 'dashboard', name: '工作室工作台', icon: Dumbbell },
-    { key: 'members', name: '学员管理', icon: Users },
-    { key: 'packs', name: '学员课包套餐', icon: Layers },
-    { key: 'logs', name: '上课消课记录', icon: ClipboardCheck },
-    { key: 'payments', name: '缴费收据明细', icon: DollarSign },
-    { key: 'backup', name: '数据安全中心', icon: Database },
+    { key: 'dashboard', name: '工作台', icon: Dumbbell },
+    { key: 'members', name: '学员', icon: Users },
+    { key: 'packs', name: '课包', icon: Layers },
+    { key: 'logs', name: '消课记录', icon: ClipboardCheck },
+    { key: 'payments', name: '收款记录', icon: DollarSign },
+    { key: 'backup', name: '数据备份', icon: Database },
   ] as const;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row relative font-sans">
       
       {/* 1. MOBILE RESPONSIVE HEADER */}
-      <header className="md:hidden bg-white border-b border-slate-200 p-4 flex justify-between items-center z-30 sticky top-0">
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white p-4 md:hidden">
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 bg-indigo-600 rounded-lg flex items-center justify-center">
             <Dumbbell className="h-4.5 w-4.5 text-white stroke-[2.5]" />
@@ -100,12 +110,13 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded font-bold">
+          <span className="rounded-md bg-indigo-50 px-2 py-1 text-sm font-bold text-indigo-700">
             {currentCoach}教练
           </span>
           <button 
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-1.5 bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800"
+            className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900"
+            aria-label={isMobileMenuOpen ? '关闭菜单' : '打开菜单'}
           >
             {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -114,7 +125,7 @@ export default function App() {
 
       {/* 2. MOBILE MENU DRAWER */}
       {isMobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 bg-white/95 backdrop-blur-md z-25 flex flex-col justify-between pt-16">
+        <div className="fixed inset-0 z-20 flex flex-col justify-between bg-white/95 pt-16 backdrop-blur-md md:hidden">
           <nav className="p-6 space-y-2">
             {navigationItems.map((item) => {
               const Icon = item.icon;
@@ -127,10 +138,10 @@ export default function App() {
                     setSelectedMemberId(null);
                     setIsMobileMenuOpen(false);
                   }}
-                  className={`w-full py-3.5 px-4 rounded-xl font-bold flex items-center gap-3 transition-all ${
+                  className={`flex min-h-12 w-full items-center gap-3 rounded-lg border px-4 text-sm font-bold transition-colors ${
                     isActive
-                      ? 'bg-indigo-50 text-indigo-600 border border-indigo-100'
-                      : 'bg-slate-50 text-slate-500 border border-transparent'
+                      ? 'border-indigo-100 bg-indigo-50 text-indigo-700'
+                      : 'border-transparent bg-slate-50 text-slate-600'
                   }`}
                 >
                   <Icon className="h-5 w-5" />
@@ -142,11 +153,11 @@ export default function App() {
 
           <div className="p-6 border-t border-slate-200 flex justify-between items-center">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-bold">联营执教中</span>
+              <span className="text-sm font-semibold text-slate-500">{currentCoach}教练已登录</span>
             </div>
             <button
               onClick={handleLogout}
-              className="py-2 px-3 bg-red-50 text-red-600 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-red-100"
+              className="flex items-center gap-1.5 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm font-bold text-red-600"
             >
               <LogOut className="h-4 w-4" />
               登出
@@ -156,17 +167,17 @@ export default function App() {
       )}
 
       {/* 3. DESKTOP PERMANENT SIDEBAR */}
-      <aside className="hidden md:flex flex-col justify-between w-64 bg-white border-r border-slate-200 p-6 shrink-0 sticky top-0 h-screen" id="desktop-sidebar">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col justify-between border-r border-slate-200 bg-white p-5 md:flex" id="desktop-sidebar">
         
         {/* Brand logo & header */}
         <div className="space-y-8">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-md">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 shadow-sm">
               <Dumbbell className="h-5 w-5 text-white stroke-[2.5]" />
             </div>
             <div>
               <h1 className="text-base font-black text-slate-900 tracking-tight leading-none">Fever Plus</h1>
-              <span className="text-[10px] text-slate-450 font-bold block mt-1 uppercase tracking-widest">
+              <span className="mt-1 block text-xs font-semibold text-slate-500">
                 力王 & 花花 私教工作室
               </span>
             </div>
@@ -184,10 +195,10 @@ export default function App() {
                     setActiveTab(item.key);
                     setSelectedMemberId(null);
                   }}
-                  className={`w-full py-2.5 px-3.5 rounded-xl text-xs font-bold flex items-center gap-3 transition-all cursor-pointer ${
+                  className={`flex min-h-11 w-full items-center gap-3 rounded-lg border px-3.5 text-sm font-bold transition-colors ${
                     isActive
-                      ? 'bg-indigo-50 text-indigo-600 border border-indigo-100/60 shadow-sm'
-                      : 'bg-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-transparent'
+                      ? 'border-indigo-100 bg-indigo-50 text-indigo-700'
+                      : 'border-transparent bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
                   id={`nav-${item.key}`}
                 >
@@ -201,30 +212,30 @@ export default function App() {
 
         {/* Coach account status footer */}
         <div className="space-y-4">
-          <div className="p-3 bg-slate-100 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-100 p-3 text-sm">
             <div className="flex items-center gap-2">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
               </span>
-              <span className="text-[11px] text-slate-600">当前执教教练: <b className="text-indigo-600 font-black">{currentCoach}</b></span>
+              <span className="text-sm text-slate-600">当前教练：<b className="font-black text-indigo-700">{currentCoach}</b></span>
             </div>
           </div>
 
           <button
             onClick={handleLogout}
-            className="w-full py-2 px-3 hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-bold text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
             id="nav-logout"
           >
             <LogOut className="h-4 w-4" />
-            注销控制台退出
+            退出登录
           </button>
         </div>
 
       </aside>
 
       {/* 4. MAIN PANEL CONTENT SECTION */}
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto max-w-7xl mx-auto w-full space-y-6">
+      <main className="mx-auto w-full max-w-[1440px] flex-1 space-y-6 overflow-y-auto p-4 md:p-7 lg:p-8">
         
         {/* Render profile detail view specifically if member is selected */}
         {selectedMemberId ? (
@@ -233,6 +244,7 @@ export default function App() {
             state={gymState}
             onBack={() => setSelectedMemberId(null)}
             onUpdateState={updateGymState}
+            onOpenLogClass={() => openLogClass(selectedMemberId)}
           />
         ) : (
           <>
@@ -240,7 +252,7 @@ export default function App() {
             {activeTab === 'dashboard' && (
               <DashboardScreen
                 state={gymState}
-                onOpenLogClass={() => setIsLogClassOpen(true)}
+                onOpenLogClass={() => openLogClass()}
                 onOpenAddMember={() => setIsAddMemberOpen(true)}
                 onOpenLogPayment={() => setIsLogPaymentOpen(true)}
                 onNavigateToMember={(mid) => setSelectedMemberId(mid)}
@@ -254,7 +266,6 @@ export default function App() {
                 state={gymState}
                 onOpenAddMember={() => setIsAddMemberOpen(true)}
                 onNavigateToMember={(mid) => setSelectedMemberId(mid)}
-                onUpdateState={updateGymState}
               />
             )}
 
@@ -270,7 +281,7 @@ export default function App() {
               <ClassLogsScreen
                 state={gymState}
                 onNavigateToMember={(mid) => setSelectedMemberId(mid)}
-                onOpenLogClass={() => setIsLogClassOpen(true)}
+                onOpenLogClass={() => openLogClass()}
               />
             )}
 
@@ -294,10 +305,11 @@ export default function App() {
       {/* 5. QUICK ACTION MODAL INSTANCES */}
       <LogClassModal
         isOpen={isLogClassOpen}
-        onClose={() => setIsLogClassOpen(false)}
+        onClose={closeLogClass}
         state={gymState}
         onUpdateState={updateGymState}
         currentCoach={currentCoach}
+        initialMemberId={logClassMemberId}
       />
 
       <AddMemberModal

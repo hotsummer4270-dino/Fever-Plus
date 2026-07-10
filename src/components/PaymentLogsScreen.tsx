@@ -20,7 +20,7 @@ export default function PaymentLogsScreen({ state }: PaymentLogsScreenProps) {
   const filterByPeriod = (logs: PaymentLog[]): PaymentLog[] => {
     if (period === 'all') return logs;
     
-    const now = new Date('2026-07-09T12:00:00'); // Anchor relative to current local time
+    const now = new Date();
     const limitDate = new Date(now);
     
     if (period === 'week') {
@@ -34,7 +34,7 @@ export default function PaymentLogsScreen({ state }: PaymentLogsScreenProps) {
     return logs.filter(log => {
       if (!log.payDate) return false;
       const logDate = new Date(log.payDate.replace(' ', 'T'));
-      return logDate >= limitDate;
+      return logDate >= limitDate && logDate <= now;
     });
   };
 

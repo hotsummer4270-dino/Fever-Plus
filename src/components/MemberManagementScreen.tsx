@@ -1,203 +1,252 @@
 import React, { useState } from 'react';
-import { Search, UserPlus, Phone, Calendar, ArrowRight, Share2 } from 'lucide-react';
-import { GymState, Member } from '../types';
+import {
+  ArrowRight,
+  Calendar,
+  Mars,
+  Phone,
+  Search,
+  Share2,
+  UserPlus,
+  Venus,
+} from 'lucide-react';
+import { GymState } from '../types';
 import DefaultAvatar from './DefaultAvatar';
 
 interface MemberManagementScreenProps {
   state: GymState;
   onOpenAddMember: () => void;
   onNavigateToMember: (memberId: string) => void;
-  onUpdateState: (newState: GymState) => void;
 }
+
+type BalanceFilter = 'all' | 'low' | 'empty';
 
 export default function MemberManagementScreen({
   state,
   onOpenAddMember,
   onNavigateToMember,
-  onUpdateState,
 }: MemberManagementScreenProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [genderFilter, setGenderFilter] = useState<'all' | 'male' | 'female'>('all');
+  const [balanceFilter, setBalanceFilter] = useState<BalanceFilter>('all');
 
-  // Get single course pack info for each member as they only have one pack
   const getMemberPackInfo = (memberId: string) => {
-    const pack = state.coursePacks.find((p) => p.status === 'active' && p.memberIds.includes(memberId));
-    if (!pack) {
-      return { remaining: 0, sharedWith: null };
-    }
-    
-    // Check if it's shared with someone else
-    let sharedWith: string | null = null;
-    if (pack.memberIds.length > 1) {
-      const otherId = pack.memberIds.find((id) => id !== memberId);
-      const otherMember = state.members.find((m) => m.id === otherId);
-      if (otherMember) {
-        sharedWith = otherMember.name;
-      }
-    }
-    return { remaining: pack.remainingSessions, sharedWith };
+    const activePacks = state.coursePacks.filter(
+      (pack) => pack.status === 'active' && pack.memberIds.includes(memberId),
+    );
+    const remaining = activePacks.reduce((sum, pack) => sum + pack.remainingSessions, 0);
+    const sharedMemberNames = Array.from(
+      new Set(
+        activePacks
+          .flatMap((pack) => pack.memberIds)
+          .filter((id) => id !== memberId)
+          .map((id) => state.members.find((member) => member.id === id)?.name)
+          .filter((name): name is string => Boolean(name)),
+      ),
+    );
+    return { remaining, sharedWith: sharedMemberNames.join('、') || null };
   };
 
-  // Filter members (removed status matching)
+  const latestClassByMember = new Map<string, string>();
+  [...state.classLogs]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .forEach((log) => {
+      if (!latestClassByMember.has(log.memberId)) {
+        latestClassByMember.set(log.memberId, log.date);
+      }
+    });
+
   const filteredMembers = state.members.filter((member) => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
     const matchesSearch =
-      member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      member.phone.includes(searchTerm);
+      member.name.toLowerCase().includes(normalizedSearch) || member.phone.includes(normalizedSearch);
     const matchesGender = genderFilter === 'all' || member.gender === genderFilter;
-    return matchesSearch && matchesGender;
+    const { remaining } = getMemberPackInfo(member.id);
+    const matchesBalance =
+      balanceFilter === 'all' ||
+      (balanceFilter === 'low' && remaining > 0 && remaining <= 5) ||
+      (balanceFilter === 'empty' && remaining === 0);
+    return matchesSearch && matchesGender && matchesBalance;
   });
 
+  const renderGenderIcon = (gender: 'male' | 'female') =>
+    gender === 'female' ? (
+      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-rose-50 text-rose-600" title="女性">
+        <Venus className="h-3.5 w-3.5" />
+      </span>
+    ) : (
+      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-50 text-blue-600" title="男性">
+        <Mars className="h-3.5 w-3.5" />
+      </span>
+    );
+
   return (
-    <div className="space-y-6" id="member-management-container">
-      
-      {/* Title Header */}
-      <div className="flex justify-between items-center">
+    <div className="space-y-5" id="member-management-container">
+      <header className="flex items-end justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold text-slate-800">学员管理</h2>
-          <p className="text-xs text-slate-500 mt-0.5">登记、查看和维护工作室所有私教合伙学员</p>
+          <h1 className="text-2xl font-extrabold text-slate-900">学员</h1>
+          <p className="mt-1 text-sm text-slate-500">共 {state.members.length} 位学员，当前显示 {filteredMembers.length} 位</p>
         </div>
-      </div>
-
-      {/* Search and Filters Header */}
-      <div className="bg-white border border-slate-200 p-5 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm">
-        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto flex-1">
-          {/* Search bar */}
-          <div className="relative flex-1 md:max-w-xs">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
-              <Search className="h-4 w-4" />
-            </span>
-            <input
-              type="text"
-              placeholder="搜索学员姓名或手机号..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 text-sm font-medium"
-            />
-          </div>
-
-          {/* Filters Select */}
-          <div className="flex gap-2">
-            <select
-              value={genderFilter}
-              onChange={(e) => setGenderFilter(e.target.value as any)}
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:border-indigo-500 text-xs font-bold"
-            >
-              <option value="all">所有性别</option>
-              <option value="male">男性</option>
-              <option value="female">女性</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Create button */}
         <button
           onClick={onOpenAddMember}
-          className="w-full md:w-auto py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-500/15 cursor-pointer text-xs transition-all"
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-bold text-white shadow-sm transition-colors hover:bg-indigo-700"
         >
-          <UserPlus className="h-4 w-4 stroke-[2.5]" />
-          手动新建学员
+          <UserPlus className="h-4 w-4" />
+          新建学员
         </button>
+      </header>
+
+      <div className="flex flex-col gap-3 border-y border-slate-200 py-3 lg:flex-row lg:items-center">
+        <div className="relative min-w-0 flex-1 lg:max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            placeholder="搜索姓名或手机号"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            className="min-h-11 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm font-medium text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:flex">
+          <select
+            value={balanceFilter}
+            onChange={(event) => setBalanceFilter(event.target.value as BalanceFilter)}
+            className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-indigo-500"
+            aria-label="课时筛选"
+          >
+            <option value="all">全部课时</option>
+            <option value="low">低课时（1-5）</option>
+            <option value="empty">无可用课时</option>
+          </select>
+          <select
+            value={genderFilter}
+            onChange={(event) => setGenderFilter(event.target.value as 'all' | 'male' | 'female')}
+            className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-indigo-500"
+            aria-label="性别筛选"
+          >
+            <option value="all">全部性别</option>
+            <option value="female">女性</option>
+            <option value="male">男性</option>
+          </select>
+        </div>
       </div>
 
-      {/* Members List - Vertical list */}
-      <div className="flex flex-col gap-3">
-        {filteredMembers.length > 0 ? (
-          filteredMembers.map((member) => {
-            const { remaining, sharedWith } = getMemberPackInfo(member.id);
-            return (
-              <div
-                key={member.id}
-                onClick={() => onNavigateToMember(member.id)}
-                className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 hover:border-indigo-300 hover:bg-slate-50/20 transition-all cursor-pointer group flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden shadow-sm"
-              >
-                {/* Visual Gender Accent Line */}
-                <div className={`absolute top-0 bottom-0 left-0 w-1.5 h-full ${member.gender === 'female' ? 'bg-rose-500' : 'bg-blue-500'}`} />
+      {filteredMembers.length > 0 ? (
+        <>
+          <div className="hidden overflow-hidden rounded-lg border border-slate-200 bg-white xl:block">
+            <div className="grid grid-cols-[minmax(190px,1.2fr)_100px_150px_140px_minmax(160px,1fr)_36px] items-center gap-4 border-b border-slate-200 bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-500">
+              <span>学员</span>
+              <span>剩余课时</span>
+              <span>课包关系</span>
+              <span>最近上课</span>
+              <span>训练备注</span>
+              <span className="sr-only">查看</span>
+            </div>
 
-                 {/* Left Side: Avatar, Name & Gender Icon */}
-                <div className="flex items-center gap-4 pl-1">
-                  <DefaultAvatar name={member.name} className="h-11 w-11" />
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-sm font-bold text-slate-800">
-                        {member.name}
-                      </h3>
-                      
-                      {/* Minimalist Gender Icon representation instead of text labels */}
-                      <span className={`p-1 rounded-lg ${
-                        member.gender === 'female'
-                          ? 'bg-rose-50 text-rose-600 border border-rose-100/40'
-                          : 'bg-blue-50 text-blue-600 border border-blue-100/40'
-                      }`} title={member.gender === 'female' ? '女性' : '男性'}>
-                        {member.gender === 'female' ? (
-                          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-rose-500 shrink-0" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="10" r="5" />
-                            <path d="M12 15v7M9 19h6" />
-                          </svg>
-                        ) : (
-                          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="10" cy="14" r="5" />
-                            <path d="M14 10l6-6M14 4h6v6" />
-                          </svg>
-                        )}
-                      </span>
-
-                      {sharedWith && (
-                        <span className="flex items-center gap-0.5 bg-indigo-50 border border-indigo-150/40 text-indigo-700 px-1.5 py-0.5 rounded-lg text-[10px] font-bold">
-                          <Share2 className="h-2.5 w-2.5" />
-                          与{sharedWith}共享
+            <div className="divide-y divide-slate-100">
+              {filteredMembers.map((member) => {
+                const { remaining, sharedWith } = getMemberPackInfo(member.id);
+                const latestClass = latestClassByMember.get(member.id);
+                return (
+                  <button
+                    key={member.id}
+                    onClick={() => onNavigateToMember(member.id)}
+                    className="group grid w-full grid-cols-[minmax(190px,1.2fr)_100px_150px_140px_minmax(160px,1fr)_36px] items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-slate-50"
+                  >
+                    <span className="flex min-w-0 items-center gap-3">
+                      <DefaultAvatar name={member.name} className="h-10 w-10 shrink-0" />
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-2">
+                          <strong className="truncate text-sm text-slate-900">{member.name}</strong>
+                          {renderGenderIcon(member.gender)}
                         </span>
-                      )}
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-x-3 text-[11px] text-slate-400 font-medium">
-                      <span className="flex items-center gap-1 font-mono">
-                        <Phone className="h-3 w-3 text-slate-450" />
-                        {member.phone}
+                        <span className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
+                          <Phone className="h-3 w-3" /> {member.phone}
+                        </span>
                       </span>
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3 text-slate-450" />
-                        注册: {member.joinDate}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                    </span>
 
-                {/* Middle Section: Assessment Note */}
-                <div className="flex-1 md:px-6 min-w-0">
-                  <p className="text-xs text-slate-500 line-clamp-2 md:line-clamp-1 italic font-medium leading-relaxed">
-                    {member.note || '暂无体态备注，点击详情进行编辑记录。'}
-                  </p>
-                </div>
-
-                 {/* Right Side: Remaining Sessions, Course Pack Info & Share Marker */}
-                <div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
-                  <div className="flex flex-col md:items-end">
-                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase">
-                      <span>私教课包余额</span>
-                    </div>
-                    <span className={`text-base font-extrabold font-mono mt-0.5 ${remaining > 5 ? 'text-emerald-600' : remaining > 0 ? 'text-amber-650 text-amber-600' : 'text-rose-500'}`}>
+                    <strong className={`text-sm ${
+                      remaining > 5 ? 'text-indigo-700' : remaining > 0 ? 'text-amber-700' : 'text-rose-600'
+                    }`}>
                       {remaining} 节
-                    </span>
-                  </div>
+                    </strong>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs text-indigo-650 font-bold group-hover:translate-x-0.5 transition-all flex items-center gap-1 bg-indigo-50 px-2.5 py-1.5 rounded-xl border border-indigo-100/50">
-                      档案详情
-                      <ArrowRight className="h-3.5 w-3.5" />
+                    <span className="min-w-0 text-sm text-slate-600">
+                      {sharedWith ? (
+                        <span className="flex items-center gap-1 truncate" title={`与 ${sharedWith} 共享`}>
+                          <Share2 className="h-3.5 w-3.5 shrink-0 text-indigo-600" />
+                          与 {sharedWith} 共享
+                        </span>
+                      ) : (
+                        '独立课包'
+                      )}
                     </span>
-                  </div>
-                </div>
 
-              </div>
-            );
-          })
-        ) : (
-          <div className="text-center py-12 bg-white border border-slate-200 rounded-2xl text-slate-400 text-xs shadow-sm font-medium">
-            未找到匹配的学员。您可以清除筛选条件，或点击右上方“手动新建学员”按钮！
+                    <span className="text-sm text-slate-600">{latestClass?.split(' ')[0] || '暂无记录'}</span>
+                    <span className="truncate text-sm text-slate-500">{member.note || '暂无训练备注'}</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors group-hover:bg-indigo-50 group-hover:text-indigo-700" title="查看学员详情">
+                      <ArrowRight className="h-4 w-4" />
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        )}
-      </div>
 
+          <div className="space-y-3 xl:hidden">
+            {filteredMembers.map((member) => {
+              const { remaining, sharedWith } = getMemberPackInfo(member.id);
+              const latestClass = latestClassByMember.get(member.id);
+              return (
+                <button
+                  key={member.id}
+                  onClick={() => onNavigateToMember(member.id)}
+                  className="w-full rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-indigo-300"
+                >
+                  <span className="flex items-start justify-between gap-3">
+                    <span className="flex min-w-0 items-center gap-3">
+                      <DefaultAvatar name={member.name} className="h-11 w-11 shrink-0" />
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-2">
+                          <strong className="truncate text-base text-slate-900">{member.name}</strong>
+                          {renderGenderIcon(member.gender)}
+                        </span>
+                        <span className="mt-1 flex items-center gap-1 text-sm text-slate-500">
+                          <Phone className="h-3.5 w-3.5" /> {member.phone}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="text-right">
+                      <span className="block text-xs font-semibold text-slate-500">剩余课时</span>
+                      <strong className={`text-lg ${
+                        remaining > 5 ? 'text-indigo-700' : remaining > 0 ? 'text-amber-700' : 'text-rose-600'
+                      }`}>
+                        {remaining} 节
+                      </strong>
+                    </span>
+                  </span>
+
+                  <span className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-sm text-slate-500">
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5" />
+                      {latestClass?.split(' ')[0] || '暂无上课记录'}
+                    </span>
+                    <span className="flex items-center justify-end gap-1.5 truncate">
+                      {sharedWith && <Share2 className="h-3.5 w-3.5 shrink-0 text-indigo-600" />}
+                      {sharedWith ? `与 ${sharedWith} 共享` : '独立课包'}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <div className="rounded-lg border border-dashed border-slate-300 bg-white py-14 text-center text-sm text-slate-500">
+          没有符合当前筛选条件的学员
+        </div>
+      )}
     </div>
   );
 }

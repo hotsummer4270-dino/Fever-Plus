@@ -63,6 +63,20 @@ export function formatDateTime(dateStr: string): string {
   return `${y}-${m}-${d}`;
 }
 
+// Local date helpers avoid the UTC day shift caused by toISOString().
+export function formatLocalDate(date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export function formatLocalDateTime(date = new Date()): string {
+  const h = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  return `${formatLocalDate(date)} ${h}:${min}`;
+}
+
 // JSON Data Export
 export function exportStateAsJSON(state: GymState): void {
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));

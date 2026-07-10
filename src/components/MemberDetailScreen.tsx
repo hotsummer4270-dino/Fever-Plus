@@ -19,7 +19,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { GymState, Member, ClassLog, CoursePack, PaymentLog, TrainingPlan, PlanDay, Exercise } from '../types';
-import { formatCurrency, formatDateTime, generateId } from '../utils';
+import { formatCurrency, formatDateTime, formatLocalDate, generateId } from '../utils';
 import DefaultAvatar from './DefaultAvatar';
 import TrainingActivityMap from './TrainingActivityMap';
 
@@ -28,6 +28,7 @@ interface MemberDetailScreenProps {
   state: GymState;
   onBack: () => void;
   onUpdateState: (newState: GymState) => void;
+  onOpenLogClass: () => void;
 }
 
 export default function MemberDetailScreen({
@@ -35,6 +36,7 @@ export default function MemberDetailScreen({
   state,
   onBack,
   onUpdateState,
+  onOpenLogClass,
 }: MemberDetailScreenProps) {
   const parseDayTitle = (dayTitle: string) => {
     const index = dayTitle.indexOf(' | ');
@@ -43,7 +45,7 @@ export default function MemberDetailScreen({
       const title = dayTitle.substring(index + 3);
       return { date, title };
     }
-    return { date: '2026-07-09', title: dayTitle };
+    return { date: formatLocalDate(), title: dayTitle };
   };
 
   const member = state.members.find((m) => m.id === memberId);
@@ -60,7 +62,7 @@ export default function MemberDetailScreen({
   const [isBuildingPlan, setIsBuildingPlan] = useState(false);
   const [planTitle, setPlanTitle] = useState('');
   
-  const todayDateStr = '2026-07-09';
+  const todayDateStr = formatLocalDate();
   const [planDays, setPlanDays] = useState<PlanDay[]>([
     { dayTitle: `${todayDateStr} | 全身力量训练`, exercises: [{ name: '', sets: 4, reps: '10', weight: '20kg', note: '' }] }
   ]);
@@ -77,9 +79,9 @@ export default function MemberDetailScreen({
 
   if (!member) {
     return (
-      <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 shadow-sm">
-        <p className="text-slate-500 text-xs font-semibold">学员未找到</p>
-        <button onClick={onBack} className="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer">返回学员列表</button>
+      <div className="rounded-lg border border-slate-200 bg-white py-12 text-center shadow-sm">
+        <p className="text-sm font-semibold text-slate-500">学员未找到</p>
+        <button onClick={onBack} className="mt-4 rounded-lg bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-200">返回学员列表</button>
       </div>
     );
   }
@@ -99,6 +101,7 @@ export default function MemberDetailScreen({
   const remainingLessons = memberPacks
     .filter(p => p.status === 'active')
     .reduce((acc, p) => acc + p.remainingSessions, 0);
+  const completedLessons = memberClassLogs.reduce((sum, log) => sum + log.sessionCount, 0);
 
   // Save profile changes
   const handleSaveProfile = () => {
@@ -124,7 +127,7 @@ export default function MemberDetailScreen({
 
   // Helper: Adding day or exercise in builder
   const addDayToPlan = () => {
-    const todayStr = '2026-07-09';
+    const todayStr = formatLocalDate();
     setPlanDays([...planDays, { dayTitle: `${todayStr} | 自定义训练`, exercises: [{ name: '', sets: 4, reps: '12', weight: '10kg', note: '' }] }]);
   };
 
@@ -187,8 +190,8 @@ export default function MemberDetailScreen({
       id: generateId('plan'),
       memberId: member.id,
       title: planTitle.trim(),
-      createdAt: new Date().toISOString().split('T')[0],
-      updatedAt: new Date().toISOString().split('T')[0],
+      createdAt: formatLocalDate(),
+      updatedAt: formatLocalDate(),
       days: cleanDays,
       isActive: true
     };
@@ -222,21 +225,28 @@ export default function MemberDetailScreen({
   const sharedName = getSharedMemberName();
 
   return (
-    <div className="space-y-6" id="member-detail-container">
+    <div className="space-y-5" id="member-detail-container">
       {/* Top Navigation */}
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
         <button
           onClick={onBack}
-          className="py-2 px-3 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 bg-white rounded-xl flex items-center gap-1.5 transition-all text-xs cursor-pointer shadow-sm"
+          className="flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
         >
           <ArrowLeft className="h-4 w-4" />
-          返回学员花名册
+          返回学员列表
+        </button>
+        <button
+          onClick={onOpenLogClass}
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-bold text-white transition-colors hover:bg-indigo-700"
+        >
+          <ClipboardCheck className="h-4 w-4" />
+          给该学员消课
         </button>
       </div>
 
       {/* Member Profile Card */}
-      <div className="bg-white border border-slate-200 p-6 rounded-2xl relative overflow-hidden shadow-sm" id="profile-card">
-        <div className="absolute top-0 left-0 w-2 h-full bg-indigo-600" />
+      <div className="relative z-10 overflow-hidden rounded-lg border border-slate-200 bg-white/95 p-5 shadow-sm backdrop-blur md:sticky md:top-4" id="profile-card">
+        <div className="absolute bottom-0 left-0 top-0 w-1 bg-indigo-600" />
         
         <div className="flex flex-col md:flex-row justify-between gap-6">
           <div className="flex items-start gap-4">
@@ -261,44 +271,44 @@ export default function MemberDetailScreen({
                   )}
                 </span>
                 {sharedName && (
-                  <span className="text-[10px] bg-indigo-50 border border-indigo-150/40 text-indigo-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                  <span className="flex items-center gap-1 rounded-md border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-700">
                     <Share2 className="h-3 w-3" />
                     与 {sharedName} 共享课包
                   </span>
                 )}
               </div>
               
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
                 <span className="flex items-center gap-1 font-semibold">
                   <Phone className="h-3.5 w-3.5 text-slate-400" />
                   {member.phone}
                 </span>
                 <span className="flex items-center gap-1 font-semibold">
                   <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                  建档日期: {member.joinDate}
+                  建档日期：{member.joinDate}
                 </span>
               </div>
 
-              <p className="text-xs text-slate-650 mt-2 p-3 bg-slate-50 rounded-xl border border-slate-100 max-w-2xl font-medium">
-                <b className="text-slate-500 block mb-0.5 font-bold">基本备注 / 评估主诉:</b>
+              <p className="mt-2 max-w-2xl rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm font-medium leading-6 text-slate-650">
+                <b className="mb-0.5 block font-bold text-slate-500">训练备注 / 评估主诉</b>
                 {member.note || '暂未添加该学员的基础体征和评测记录。'}
               </p>
             </div>
           </div>
 
           {/* Quick Metrics */}
-          <div className="flex gap-4 md:text-right md:self-center">
-            <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl min-w-[110px] text-center md:text-right">
-              <span className="text-[10px] text-slate-400 block font-bold">私教剩余课时</span>
-              <span className={`text-xl font-black font-mono ${remainingLessons > 5 ? 'text-indigo-600' : 'text-amber-600'}`}>
-                {remainingLessons} <small className="text-xs">节</small>
+          <div className="grid grid-cols-2 gap-2 md:self-center md:text-right">
+            <div className="min-w-[120px] rounded-lg border border-slate-100 bg-slate-50 p-3 text-center md:text-right">
+              <span className="block text-sm font-semibold text-slate-500">剩余课时</span>
+              <span className={`text-2xl font-black ${remainingLessons > 5 ? 'text-indigo-700' : 'text-amber-700'}`}>
+                {remainingLessons} <small className="text-sm">节</small>
               </span>
             </div>
             
-            <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl min-w-[110px] text-center md:text-right">
-              <span className="text-[10px] text-slate-400 block font-bold">累计已上课</span>
-              <span className="text-xl font-black text-slate-800 font-mono">
-                {memberClassLogs.length} <small className="text-xs">节</small>
+            <div className="min-w-[120px] rounded-lg border border-slate-100 bg-slate-50 p-3 text-center md:text-right">
+              <span className="block text-sm font-semibold text-slate-500">累计消课</span>
+              <span className="text-2xl font-black text-slate-900">
+                {completedLessons} <small className="text-sm">节</small>
               </span>
             </div>
           </div>
@@ -309,7 +319,7 @@ export default function MemberDetailScreen({
       <TrainingActivityMap classLogs={memberClassLogs} joinDate={member.joinDate} />
 
       {/* Sub Tabs Navigation */}
-      <div className="border-b border-slate-200 flex gap-4">
+      <div className="flex gap-5 overflow-x-auto border-b border-slate-200">
         {[
           { key: 'plan', name: '专属训练计划', icon: Dumbbell },
           { key: 'logs', name: '历史消课记录', icon: ClipboardCheck },
@@ -326,7 +336,7 @@ export default function MemberDetailScreen({
                 setIsEditingProfile(false);
                 setIsBuildingPlan(false);
               }}
-              className={`pb-3 text-xs font-bold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+              className={`flex shrink-0 items-center gap-1.5 border-b-2 pb-3 text-sm font-bold transition-colors ${
                 isActive 
                   ? 'border-indigo-600 text-indigo-600' 
                   : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -391,7 +401,7 @@ export default function MemberDetailScreen({
                           <div key={dIdx} className="bg-slate-50 border border-slate-100 p-4 rounded-xl space-y-3">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <span className="text-[10px] font-bold text-slate-500 bg-slate-200/60 px-2 py-0.5 rounded border border-slate-300 font-mono">
-                                📅 {date || '2026-07-09'}
+                                {date || todayDateStr}
                               </span>
                               <span className="text-[11px] font-bold text-indigo-750 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
                                 🏋️ {title}
@@ -500,7 +510,7 @@ export default function MemberDetailScreen({
                             <span className="text-[10px] font-extrabold text-slate-500 uppercase">训练日期:</span>
                             <input
                               type="date"
-                              value={date || '2026-07-09'}
+                              value={date || todayDateStr}
                               onChange={(e) => {
                                 const newDate = e.target.value;
                                 updateDayTitle(dIdx, `${newDate} | ${title || '全身力量训练'}`);
@@ -515,7 +525,7 @@ export default function MemberDetailScreen({
                               value={title}
                               onChange={(e) => {
                                 const newTitle = e.target.value;
-                                updateDayTitle(dIdx, `${date || '2026-07-09'} | ${newTitle}`);
+                                updateDayTitle(dIdx, `${date || todayDateStr} | ${newTitle}`);
                               }}
                               className="bg-white border border-slate-200 px-2.5 py-1 text-xs font-bold text-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 flex-1 min-w-[150px]"
                               placeholder="例如：全身核心力量强化"

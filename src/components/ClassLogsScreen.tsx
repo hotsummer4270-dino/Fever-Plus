@@ -25,7 +25,7 @@ export default function ClassLogsScreen({
   const filterByPeriod = (logs: ClassLog[]): ClassLog[] => {
     if (period === 'all') return logs;
     
-    const now = new Date('2026-07-09T12:00:00'); // Anchor relative to current local time
+    const now = new Date();
     const limitDate = new Date(now);
     
     if (period === 'today') {
@@ -39,7 +39,7 @@ export default function ClassLogsScreen({
     return logs.filter(log => {
       if (!log.date) return false;
       const logDate = new Date(log.date.replace(' ', 'T'));
-      return logDate >= limitDate;
+      return logDate >= limitDate && logDate <= now;
     });
   };
 
