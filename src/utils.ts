@@ -3,6 +3,106 @@ import { INITIAL_GYM_STATE } from './initialData';
 
 const LOCAL_STORAGE_KEY = 'lh_studio_gym_state';
 
+export const CURRENT_SCHEMA_VERSION = 2;
+
+export function getPurchasedSessions(pack: CoursePack): number {
+  return pack.purchasedSessions ?? pack.totalSessions;
+}
+
+export function getGiftedSessions(pack: CoursePack): number {
+  return pack.giftedSessions ?? 0;
+}
+
+export function getRemainingPurchasedSessions(pack: CoursePack): number {
+  if (pack.remainingPurchasedSessions !== undefined) return pack.remainingPurchasedSessions;
+  return Math.min(pack.remainingSessions, getPurchasedSessions(pack));
+}
+
+export function getRemainingGiftedSessions(pack: CoursePack): number {
+  if (pack.remainingGiftedSessions !== undefined) return pack.remainingGiftedSessions;
+  return Math.max(0, pack.remainingSessions - getRemainingPurchasedSessions(pack));
+}
+
+export function normalizeGymState(state: GymState): GymState {
+  const normalizedPacks = (state.coursePacks || []).map((pack) => {
+    const purchasedSessions = getPurchasedSessions(pack);
+    const giftedSessions = getGiftedSessions(pack);
+    const remainingPurchasedSessions = getRemainingPurchasedSessions(pack);
+    const remainingGiftedSessions = getRemainingGiftedSessions(pack);
+    return {
+      ...pack,
+      purchasedSessions,
+      giftedSessions,
+      remainingPurchasedSessions,
+      remainingGiftedSessions,
+      totalSessions: purchasedSessions + giftedSessions,
+      remainingSessions: remainingPurchasedSessions + remainingGiftedSessions,
+      expiresAt: pack.expiresAt ?? null,
+    };
+  });
+
+  const normalizedPayments = (state.paymentLogs || []).map((payment) => {
+    const linkedPack = normalizedPacks.find((pack) => pack.id === payment.coursePackId);
+    const receivableAmount = payment.receivableAmount ?? linkedPack?.price ?? payment.amount;
+    return {
+      ...payment,
+      receivableAmount,
+      discountAmount: payment.discountAmount ?? Math.max(0, receivableAmount - payment.amount),
+    };
+  });
+
+  return {
+    ...state,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    members: state.members || [],
+    coursePacks: normalizedPacks,
+    paymentLogs: normalizedPayments,
+    classLogs: state.classLogs || [],
+    trainingPlans: state.trainingPlans || [],
+  };
+}
+
+export function deductSessionsFromPack(pack: CoursePack, count: number) {
+  const remainingPurchased = getRemainingPurchasedSessions(pack);
+  const remainingGifted = getRemainingGiftedSessions(pack);
+  const deductedPurchasedSessions = Math.min(remainingPurchased, count);
+  const deductedGiftedSessions = Math.min(remainingGifted, count - deductedPurchasedSessions);
+  const nextPurchased = remainingPurchased - deductedPurchasedSessions;
+  const nextGifted = remainingGifted - deductedGiftedSessions;
+  const nextTotal = nextPurchased + nextGifted;
+
+  return {
+    pack: {
+      ...pack,
+      remainingPurchasedSessions: nextPurchased,
+      remainingGiftedSessions: nextGifted,
+      remainingSessions: nextTotal,
+      status: nextTotal <= 0 ? 'completed' as const : pack.status,
+    },
+    deductedPurchasedSessions,
+    deductedGiftedSessions,
+  };
+}
+
+export function restoreSessionsToPack(pack: CoursePack, log: ClassLog): CoursePack {
+  const purchasedCapacity = getPurchasedSessions(pack);
+  const giftedCapacity = getGiftedSessions(pack);
+  const currentPurchased = getRemainingPurchasedSessions(pack);
+  const currentGifted = getRemainingGiftedSessions(pack);
+  const restorePurchased = log.deductedPurchasedSessions ?? log.sessionCount;
+  const restoreGifted = log.deductedGiftedSessions ?? 0;
+  const nextPurchased = Math.min(purchasedCapacity, currentPurchased + restorePurchased);
+  const nextGifted = Math.min(giftedCapacity, currentGifted + restoreGifted);
+
+  return {
+    ...pack,
+    remainingPurchasedSessions: nextPurchased,
+    remainingGiftedSessions: nextGifted,
+    remainingSessions: nextPurchased + nextGifted,
+    status: 'active',
+  };
+}
+
 // Load state with fallback to initial data
 export function loadGymState(): GymState {
   try {
@@ -11,13 +111,13 @@ export function loadGymState(): GymState {
       const parsed = JSON.parse(saved);
       // Basic structure validation
       if (parsed.members && parsed.coursePacks && parsed.paymentLogs && parsed.classLogs) {
-        return parsed as GymState;
+        return normalizeGymState(parsed as GymState);
       }
     }
   } catch (e) {
     console.error('Error loading gym state from localStorage:', e);
   }
-  return INITIAL_GYM_STATE;
+  return normalizeGymState(INITIAL_GYM_STATE);
 }
 
 // Save state to localStorage
@@ -101,7 +201,7 @@ export function validateAndParseImport(jsonText: string): GymState | null {
       Array.isArray(data.classLogs)
     ) {
       // Valid enough for restoration
-      return data as GymState;
+      return normalizeGymState(data as GymState);
     }
   } catch (e) {
     console.error('Invalid backup file JSON:', e);

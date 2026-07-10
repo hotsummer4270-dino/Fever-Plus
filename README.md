@@ -1,20 +1,37 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Fever Plus
 
-# Run and deploy your AI Studio app
+力王和花花私教工作室使用的轻量课时与收款账本。
 
-This contains everything you need to run your app locally.
+## 核心功能
 
-View your app in AI Studio: https://ai.studio/apps/65802eba-3e12-4085-8540-b05d89d442dc
+- 快速消课，支持撤销并退回原课包
+- 登记应收、实收、已购课时和赠送课时
+- 一个课包可绑定多位学员共享使用
+- 课包默认无限期，并保留冻结状态的数据结构
+- 学员备注、低课时提醒和 30 天未上课轻提醒
+- 消课、收款、课包统一记录页
+- JSON 数据导入与导出
 
-## Run Locally
+## 本地运行
 
-**Prerequisites:**  Node.js
+需要 Node.js 18 或更高版本。
 
+```bash
+npm install
+npm run dev
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+默认访问 `http://localhost:3000`，不需要配置环境变量。
+
+## 检查与构建
+
+```bash
+npm run lint
+npm run build
+```
+
+## 数据说明
+
+当前版本使用浏览器 `localStorage` 保存数据。同一台设备、同一个浏览器可以持续使用，但不同手机或电脑之间暂时不会自动同步。请定期在“数据”页面导出 JSON 备份。
+
+要让力王和花花在不同设备上实时查看同一本账，需要在下一阶段接入云数据库和服务端登录。

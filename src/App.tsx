@@ -2,15 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { 
   Dumbbell, 
   Users, 
-  Layers, 
-  ClipboardCheck, 
-  DollarSign, 
+  ClipboardList,
   Database, 
   LogOut, 
   Menu, 
+  RotateCcw,
   X
 } from 'lucide-react';
-import { loadGymState, saveGymState } from './utils';
+import { loadGymState, restoreSessionsToPack, saveGymState } from './utils';
 import { GymState, Coach } from './types';
 
 // Import Modular Components
@@ -18,9 +17,7 @@ import LoginScreen from './components/LoginScreen';
 import DashboardScreen from './components/DashboardScreen';
 import MemberManagementScreen from './components/MemberManagementScreen';
 import MemberDetailScreen from './components/MemberDetailScreen';
-import CoursePackScreen from './components/CoursePackScreen';
-import ClassLogsScreen from './components/ClassLogsScreen';
-import PaymentLogsScreen from './components/PaymentLogsScreen';
+import RecordsScreen, { RecordsTab } from './components/RecordsScreen';
 import DataBackupScreen from './components/DataBackupScreen';
 
 import { 
@@ -35,7 +32,8 @@ export default function App() {
   const [currentCoach, setCurrentCoach] = useState<Coach>('力王');
 
   // Main Active view tabs
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'members' | 'packs' | 'logs' | 'payments' | 'backup'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'members' | 'records' | 'backup'>('dashboard');
+  const [recordsTab, setRecordsTab] = useState<RecordsTab>('logs');
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   // App database state
@@ -49,6 +47,8 @@ export default function App() {
   const [logClassMemberId, setLogClassMemberId] = useState<string | undefined>();
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
   const [isLogPaymentOpen, setIsLogPaymentOpen] = useState(false);
+  const [paymentMemberId, setPaymentMemberId] = useState<string | undefined>();
+  const [pendingUndoLogId, setPendingUndoLogId] = useState<string | null>(null);
 
   // Sync state changes to localStorage
   useEffect(() => {
@@ -82,6 +82,47 @@ export default function App() {
     setLogClassMemberId(undefined);
   };
 
+  const openLogPayment = (memberId?: string) => {
+    setPaymentMemberId(memberId);
+    setIsLogPaymentOpen(true);
+  };
+
+  const closeLogPayment = () => {
+    setIsLogPaymentOpen(false);
+    setPaymentMemberId(undefined);
+  };
+
+  const openRecords = (tab: RecordsTab) => {
+    setRecordsTab(tab);
+    setActiveTab('records');
+    setSelectedMemberId(null);
+  };
+
+  const handleUndoClass = () => {
+    if (!pendingUndoLogId) return;
+    const log = gymState.classLogs.find((item) => item.id === pendingUndoLogId);
+    if (!log) return;
+    const pack = gymState.coursePacks.find((item) => item.id === log.coursePackId);
+    if (!pack) {
+      window.alert('对应课包不存在，无法自动恢复课时。');
+      setPendingUndoLogId(null);
+      return;
+    }
+
+    setGymState((current) => ({
+      ...current,
+      coursePacks: current.coursePacks.map((item) =>
+        item.id === pack.id ? restoreSessionsToPack(item, log) : item,
+      ),
+      classLogs: current.classLogs.filter((item) => item.id !== pendingUndoLogId),
+    }));
+    setPendingUndoLogId(null);
+  };
+
+  const pendingUndoLog = pendingUndoLogId
+    ? gymState.classLogs.find((item) => item.id === pendingUndoLogId)
+    : undefined;
+
   // If not logged in, render beautiful login gate
   if (!isLoggedIn) {
     return <LoginScreen onLogin={handleLogin} />;
@@ -91,10 +132,8 @@ export default function App() {
   const navigationItems = [
     { key: 'dashboard', name: '工作台', icon: Dumbbell },
     { key: 'members', name: '学员', icon: Users },
-    { key: 'packs', name: '课包', icon: Layers },
-    { key: 'logs', name: '消课记录', icon: ClipboardCheck },
-    { key: 'payments', name: '收款记录', icon: DollarSign },
-    { key: 'backup', name: '数据备份', icon: Database },
+    { key: 'records', name: '记录', icon: ClipboardList },
+    { key: 'backup', name: '数据', icon: Database },
   ] as const;
 
   return (
@@ -245,6 +284,7 @@ export default function App() {
             onBack={() => setSelectedMemberId(null)}
             onUpdateState={updateGymState}
             onOpenLogClass={() => openLogClass(selectedMemberId)}
+            onOpenLogPayment={() => openLogPayment(selectedMemberId)}
           />
         ) : (
           <>
@@ -254,9 +294,9 @@ export default function App() {
                 state={gymState}
                 onOpenLogClass={() => openLogClass()}
                 onOpenAddMember={() => setIsAddMemberOpen(true)}
-                onOpenLogPayment={() => setIsLogPaymentOpen(true)}
+                onOpenLogPayment={() => openLogPayment()}
                 onNavigateToMember={(mid) => setSelectedMemberId(mid)}
-                onNavigateToTab={(tab) => setActiveTab(tab as any)}
+                onNavigateToRecords={openRecords}
                 currentCoach={currentCoach}
               />
             )}
@@ -269,25 +309,15 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'packs' && (
-              <CoursePackScreen
+            {activeTab === 'records' && (
+              <RecordsScreen
                 state={gymState}
-                onOpenLogPayment={() => setIsLogPaymentOpen(true)}
-                onNavigateToMember={(mid) => setSelectedMemberId(mid)}
-              />
-            )}
-
-            {activeTab === 'logs' && (
-              <ClassLogsScreen
-                state={gymState}
-                onNavigateToMember={(mid) => setSelectedMemberId(mid)}
+                activeTab={recordsTab}
+                onChangeTab={setRecordsTab}
                 onOpenLogClass={() => openLogClass()}
-              />
-            )}
-
-            {activeTab === 'payments' && (
-              <PaymentLogsScreen
-                state={gymState}
+                onOpenLogPayment={() => openLogPayment()}
+                onNavigateToMember={(mid) => setSelectedMemberId(mid)}
+                onUndoClass={setPendingUndoLogId}
               />
             )}
 
@@ -321,10 +351,52 @@ export default function App() {
 
       <LogPaymentModal
         isOpen={isLogPaymentOpen}
-        onClose={() => setIsLogPaymentOpen(false)}
+        onClose={closeLogPayment}
         state={gymState}
         onUpdateState={updateGymState}
+        currentCoach={currentCoach}
+        initialMemberId={paymentMemberId}
       />
+
+      {pendingUndoLog && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div
+            className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-5 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="undo-class-title"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-700">
+                <RotateCcw className="h-4 w-4" />
+              </div>
+              <div>
+                <h2 id="undo-class-title" className="text-lg font-bold text-slate-900">撤销这次消课？</h2>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  {pendingUndoLog.memberName} 的 {pendingUndoLog.sessionCount} 节课时会退回原课包，这条消课记录会被删除。
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingUndoLogId(null)}
+                className="min-h-11 rounded-lg border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleUndoClass}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-rose-600 text-sm font-bold text-white hover:bg-rose-700"
+              >
+                <RotateCcw className="h-4 w-4" />
+                确认撤销
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

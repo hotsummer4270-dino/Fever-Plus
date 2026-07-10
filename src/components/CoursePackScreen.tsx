@@ -1,18 +1,26 @@
 import React, { useState } from 'react';
 import { Layers, Users, Calendar, Plus, ChevronDown, ChevronUp, Search, ExternalLink } from 'lucide-react';
 import { GymState, CoursePack } from '../types';
-import { formatCurrency } from '../utils';
+import {
+  formatCurrency,
+  getGiftedSessions,
+  getPurchasedSessions,
+  getRemainingGiftedSessions,
+  getRemainingPurchasedSessions,
+} from '../utils';
 
 interface CoursePackScreenProps {
   state: GymState;
   onOpenLogPayment: () => void;
   onNavigateToMember: (memberId: string) => void;
+  embedded?: boolean;
 }
 
 export default function CoursePackScreen({
   state,
   onOpenLogPayment,
   onNavigateToMember,
+  embedded = false,
 }: CoursePackScreenProps) {
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('active');
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,11 +55,12 @@ export default function CoursePackScreen({
   return (
     <div className="space-y-6" id="course-pack-container">
       
-      {/* View Header */}
-      <div>
-        <h2 className="text-lg font-bold text-slate-800">学员课包套餐</h2>
-        <p className="text-xs text-slate-500 mt-0.5">学员充值的课包余额档案，支持多口人合并共享</p>
-      </div>
+      {!embedded && (
+        <header>
+          <h1 className="text-2xl font-extrabold text-slate-900">课包记录</h1>
+          <p className="mt-1 text-sm text-slate-500">查看剩余课时、赠送课时和共享学员。</p>
+        </header>
+      )}
 
       {/* Control Header with Filters & Search by Student Name */}
       <div className="bg-white border border-slate-200 p-5 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm">
@@ -91,13 +100,15 @@ export default function CoursePackScreen({
           </div>
         </div>
 
-        <button
-          onClick={onOpenLogPayment}
-          className="w-full md:w-auto py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-500/15 cursor-pointer text-xs transition-all"
-        >
-          <Plus className="h-4 w-4 stroke-[2.5]" />
-          购买新课包/充值
-        </button>
+        {!embedded && (
+          <button
+            onClick={onOpenLogPayment}
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white hover:bg-emerald-700 md:w-auto"
+          >
+            <Plus className="h-4 w-4" />
+            记收款并开包
+          </button>
+        )}
       </div>
 
       {/* Course Packs Vertical List (竖向排列，一条一条) */}
@@ -108,6 +119,11 @@ export default function CoursePackScreen({
             const consumedPercent = Math.round(
               ((pack.totalSessions - pack.remainingSessions) / pack.totalSessions) * 100
             );
+            const purchasedSessions = getPurchasedSessions(pack);
+            const giftedSessions = getGiftedSessions(pack);
+            const remainingPurchasedSessions = getRemainingPurchasedSessions(pack);
+            const remainingGiftedSessions = getRemainingGiftedSessions(pack);
+            const linkedPayment = state.paymentLogs.find((payment) => payment.coursePackId === pack.id);
 
             // Fetch list of members bound to this pack
             const boundMembersList = pack.memberIds.map((mid) => {
@@ -123,9 +139,11 @@ export default function CoursePackScreen({
                 className="bg-white border border-slate-200 rounded-2xl hover:border-slate-350 overflow-hidden shadow-sm transition-all"
               >
                 {/* Main Row summary click-to-toggle details */}
-                <div
+                <button
+                  type="button"
                   onClick={() => toggleExpand(pack.id)}
-                  className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/40 select-none"
+                  className="flex w-full flex-col justify-between gap-4 p-4 text-left hover:bg-slate-50/40 sm:flex-row sm:items-center sm:p-5"
+                  aria-expanded={isExpanded}
                 >
                   {/* Left block: student name label & date */}
                   <div className="flex items-center gap-4 flex-1">
@@ -149,9 +167,9 @@ export default function CoursePackScreen({
                   <div className="flex items-center justify-between sm:justify-end gap-6 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
                     <div className="grid grid-cols-2 gap-6 text-right font-mono text-xs sm:flex sm:items-center sm:gap-6">
                       <div>
-                        <span className="text-[9px] text-slate-400 block uppercase font-bold">课包实收</span>
+                        <span className="text-[9px] text-slate-400 block uppercase font-bold">应收 / 实收</span>
                         <span className="font-bold text-slate-750 font-sans">
-                          {formatCurrency(pack.price)}
+                          {formatCurrency(pack.price)} / {formatCurrency(linkedPayment?.amount ?? pack.price)}
                         </span>
                       </div>
                       <div>
@@ -168,7 +186,7 @@ export default function CoursePackScreen({
                       {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </div>
                   </div>
-                </div>
+                </button>
 
                 {/* Expanded content details block */}
                 {isExpanded && (
@@ -186,12 +204,33 @@ export default function CoursePackScreen({
                           className={`h-full rounded-full transition-all duration-300 ${
                             pack.remainingSessions === 0
                               ? 'bg-slate-300'
-                              : 'bg-gradient-to-r from-indigo-500 to-purple-500'
+                              : 'bg-indigo-600'
                           }`}
                           style={{ width: `${consumedPercent}%` }}
                         />
                       </div>
                     </div>
+
+                    <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <dt className="text-xs font-semibold text-slate-500">已购课时</dt>
+                        <dd className="mt-1 text-sm font-bold text-slate-900">{remainingPurchasedSessions} / {purchasedSessions} 节</dd>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <dt className="text-xs font-semibold text-slate-500">赠送课时</dt>
+                        <dd className="mt-1 text-sm font-bold text-emerald-700">{remainingGiftedSessions} / {giftedSessions} 节</dd>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <dt className="text-xs font-semibold text-slate-500">有效期</dt>
+                        <dd className="mt-1 text-sm font-bold text-slate-900">{pack.expiresAt || '无限期'}</dd>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <dt className="text-xs font-semibold text-slate-500">状态</dt>
+                        <dd className="mt-1 text-sm font-bold text-slate-900">
+                          {pack.status === 'active' ? '使用中' : pack.status === 'frozen' ? '已冻结' : pack.status === 'completed' ? '已用完' : '已退款'}
+                        </dd>
+                      </div>
+                    </dl>
 
                     {/* Member details with navigation links */}
                     <div className="p-3 bg-white border border-slate-200/60 rounded-xl space-y-2">

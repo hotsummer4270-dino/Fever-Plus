@@ -19,6 +19,7 @@ interface MemberManagementScreenProps {
 }
 
 type BalanceFilter = 'all' | 'low' | 'empty';
+type ActivityFilter = 'all' | 'inactive';
 
 export default function MemberManagementScreen({
   state,
@@ -26,7 +27,7 @@ export default function MemberManagementScreen({
   onNavigateToMember,
 }: MemberManagementScreenProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [genderFilter, setGenderFilter] = useState<'all' | 'male' | 'female'>('all');
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all');
   const [balanceFilter, setBalanceFilter] = useState<BalanceFilter>('all');
 
   const getMemberPackInfo = (memberId: string) => {
@@ -55,17 +56,27 @@ export default function MemberManagementScreen({
       }
     });
 
+  const getMemberActivity = (memberId: string, joinDate: string) => {
+    const latestClass = latestClassByMember.get(memberId);
+    const sourceDate = new Date((latestClass || joinDate).replace(' ', 'T'));
+    const inactiveDays = Number.isNaN(sourceDate.getTime())
+      ? 0
+      : Math.max(0, Math.floor((Date.now() - sourceDate.getTime()) / 86_400_000));
+    return { latestClass, inactiveDays, isInactive: inactiveDays >= 30 };
+  };
+
   const filteredMembers = state.members.filter((member) => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     const matchesSearch =
       member.name.toLowerCase().includes(normalizedSearch) || member.phone.includes(normalizedSearch);
-    const matchesGender = genderFilter === 'all' || member.gender === genderFilter;
+    const { isInactive } = getMemberActivity(member.id, member.joinDate);
+    const matchesActivity = activityFilter === 'all' || isInactive;
     const { remaining } = getMemberPackInfo(member.id);
     const matchesBalance =
       balanceFilter === 'all' ||
       (balanceFilter === 'low' && remaining > 0 && remaining <= 5) ||
       (balanceFilter === 'empty' && remaining === 0);
-    return matchesSearch && matchesGender && matchesBalance;
+    return matchesSearch && matchesActivity && matchesBalance;
   });
 
   const renderGenderIcon = (gender: 'male' | 'female') =>
@@ -119,14 +130,13 @@ export default function MemberManagementScreen({
             <option value="empty">无可用课时</option>
           </select>
           <select
-            value={genderFilter}
-            onChange={(event) => setGenderFilter(event.target.value as 'all' | 'male' | 'female')}
+            value={activityFilter}
+            onChange={(event) => setActivityFilter(event.target.value as ActivityFilter)}
             className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-indigo-500"
-            aria-label="性别筛选"
+            aria-label="上课活跃度筛选"
           >
-            <option value="all">全部性别</option>
-            <option value="female">女性</option>
-            <option value="male">男性</option>
+            <option value="all">全部上课状态</option>
+            <option value="inactive">30 天未上课</option>
           </select>
         </div>
       </div>
@@ -146,12 +156,12 @@ export default function MemberManagementScreen({
             <div className="divide-y divide-slate-100">
               {filteredMembers.map((member) => {
                 const { remaining, sharedWith } = getMemberPackInfo(member.id);
-                const latestClass = latestClassByMember.get(member.id);
+                const { latestClass, inactiveDays, isInactive } = getMemberActivity(member.id, member.joinDate);
                 return (
                   <button
                     key={member.id}
                     onClick={() => onNavigateToMember(member.id)}
-                    className="group grid w-full grid-cols-[minmax(190px,1.2fr)_100px_150px_140px_minmax(160px,1fr)_36px] items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-slate-50"
+                    className={`group grid w-full grid-cols-[minmax(190px,1.2fr)_100px_150px_140px_minmax(160px,1fr)_36px] items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-slate-50 ${isInactive ? 'bg-amber-50/40' : ''}`}
                   >
                     <span className="flex min-w-0 items-center gap-3">
                       <DefaultAvatar name={member.name} className="h-10 w-10 shrink-0" />
@@ -183,7 +193,9 @@ export default function MemberManagementScreen({
                       )}
                     </span>
 
-                    <span className="text-sm text-slate-600">{latestClass?.split(' ')[0] || '暂无记录'}</span>
+                    <span className={isInactive ? 'text-sm font-semibold text-amber-700' : 'text-sm text-slate-600'}>
+                      {latestClass?.split(' ')[0] || '暂无记录'}{isInactive ? ` · ${inactiveDays}天` : ''}
+                    </span>
                     <span className="truncate text-sm text-slate-500">{member.note || '暂无训练备注'}</span>
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors group-hover:bg-indigo-50 group-hover:text-indigo-700" title="查看学员详情">
                       <ArrowRight className="h-4 w-4" />
@@ -197,12 +209,12 @@ export default function MemberManagementScreen({
           <div className="space-y-3 xl:hidden">
             {filteredMembers.map((member) => {
               const { remaining, sharedWith } = getMemberPackInfo(member.id);
-              const latestClass = latestClassByMember.get(member.id);
+              const { latestClass, inactiveDays, isInactive } = getMemberActivity(member.id, member.joinDate);
               return (
                 <button
                   key={member.id}
                   onClick={() => onNavigateToMember(member.id)}
-                  className="w-full rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-indigo-300"
+                  className={`w-full rounded-lg border p-4 text-left shadow-sm transition-colors hover:border-indigo-300 ${isInactive ? 'border-amber-200 bg-amber-50/40' : 'border-slate-200 bg-white'}`}
                 >
                   <span className="flex items-start justify-between gap-3">
                     <span className="flex min-w-0 items-center gap-3">
@@ -230,7 +242,7 @@ export default function MemberManagementScreen({
                   <span className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-sm text-slate-500">
                     <span className="flex items-center gap-1.5">
                       <Calendar className="h-3.5 w-3.5" />
-                      {latestClass?.split(' ')[0] || '暂无上课记录'}
+                      {latestClass?.split(' ')[0] || '暂无上课记录'}{isInactive ? ` · ${inactiveDays}天` : ''}
                     </span>
                     <span className="flex items-center justify-end gap-1.5 truncate">
                       {sharedWith && <Share2 className="h-3.5 w-3.5 shrink-0 text-indigo-600" />}

@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check, DollarSign, Dumbbell, UserPlus, Info } from 'lucide-react';
 import { GymState, Member, CoursePack, ClassLog, PaymentLog, Coach } from '../types';
-import { formatLocalDate, formatLocalDateTime, generateId } from '../utils';
+import {
+  deductSessionsFromPack,
+  formatLocalDate,
+  formatLocalDateTime,
+  generateId,
+} from '../utils';
 
 interface ModalProps {
   isOpen: boolean;
@@ -37,43 +42,14 @@ export function LogClassModal({
       setCoach(currentCoach || '力王');
       setDuration(60);
       setSessionCount(1);
+      setContent('');
       setError('');
       const targetMember = state.members.find((member) => member.id === initialMemberId);
       setSelectedMemberId(targetMember?.id || state.members[0]?.id || '');
     }
   }, [currentCoach, initialMemberId, isOpen, state.members]);
 
-  const getTodayTrainingContent = (memberId: string): string => {
-    if (!state.trainingPlans) return '';
-    const activePlan = state.trainingPlans.find(p => p.memberId === memberId && p.isActive);
-    if (!activePlan) return '';
-    
-    const todayStr = formatLocalDate();
-    // Find a workout matching today's date
-    let targetDay = activePlan.days.find(day => day.dayTitle.includes(todayStr));
-    
-    // Fallback to latest plan day if none matches today
-    if (!targetDay && activePlan.days.length > 0) {
-      targetDay = activePlan.days[activePlan.days.length - 1];
-    }
-    
-    if (targetDay) {
-      const idx = targetDay.dayTitle.indexOf(' | ');
-      const title = idx !== -1 ? targetDay.dayTitle.substring(idx + 3) : targetDay.dayTitle;
-      
-      let text = `【授课计划：${title}】\n`;
-      targetDay.exercises.forEach((ex, index) => {
-        text += `${index + 1}. ${ex.name}: ${ex.sets}组 x ${ex.reps}次 (${ex.weight || '无'})\n`;
-        if (ex.note) {
-          text += `   提示: ${ex.note}\n`;
-        }
-      });
-      return text;
-    }
-    return '';
-  };
-
-  // Update selected pack and autofill training plan whenever selected member changes
+  // Select the first usable package when the member changes.
   useEffect(() => {
     if (selectedMemberId) {
       const memberPacks = state.coursePacks.filter(
@@ -86,18 +62,12 @@ export function LogClassModal({
         setSelectedPackId('');
       }
 
-      // Auto-fill training content with today's plan if available
-      const planText = getTodayTrainingContent(selectedMemberId);
-      if (planText) {
-        setContent(planText);
-      } else {
-        setContent('');
-      }
+      setContent('');
     } else {
       setSelectedPackId('');
       setContent('');
     }
-  }, [selectedMemberId, state.coursePacks, state.trainingPlans]);
+  }, [selectedMemberId, state.coursePacks]);
 
   if (!isOpen) return null;
 
@@ -121,26 +91,16 @@ export function LogClassModal({
       setError('该学员目前没有可用课包（请先办理新课包或充值）');
       return;
     }
-    if (!content.trim()) {
-      setError('请填写今日训练内容（如：深蹲 60kg 4x10 等）');
-      return;
-    }
-
     const pack = state.coursePacks.find((p) => p.id === selectedPackId);
     if (!pack || pack.remainingSessions < sessionCount) {
       setError('所选课包剩余课时不足！');
       return;
     }
 
-    // Deduct course session
+    const deduction = deductSessionsFromPack(pack, sessionCount);
     const updatedPacks = state.coursePacks.map((p) => {
       if (p.id === selectedPackId) {
-        const remaining = p.remainingSessions - sessionCount;
-        return {
-          ...p,
-          remainingSessions: remaining,
-          status: remaining <= 0 ? 'completed' as const : p.status,
-        };
+        return deduction.pack;
       }
       return p;
     });
@@ -155,8 +115,10 @@ export function LogClassModal({
       coursePackName: pack.name,
       date: dateTime,
       duration,
-      content,
+      content: content.trim(),
       sessionCount,
+      deductedPurchasedSessions: deduction.deductedPurchasedSessions,
+      deductedGiftedSessions: deduction.deductedGiftedSessions,
     };
 
     onUpdateState({
@@ -180,7 +142,7 @@ export function LogClassModal({
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-900">快速消课</h2>
-              <p className="text-sm text-slate-500">选学员、记训练、保存</p>
+              <p className="text-sm text-slate-500">选学员，保存后扣除课时</p>
             </div>
           </div>
           <button
@@ -247,14 +209,14 @@ export function LogClassModal({
 
           <div>
             <label className="mb-1.5 block text-sm font-bold text-slate-700" htmlFor="log-class-content">
-              训练内容与表现
+              上课备注 <span className="font-medium text-slate-400">（选填）</span>
             </label>
             <textarea
               id="log-class-content"
               rows={5}
               value={content}
               onChange={(event) => setContent(event.target.value)}
-              placeholder="例如：深蹲 60kg 4×10；最后一组稳定性下降，下次继续巩固。"
+              placeholder="有需要再记，例如：今天练腿，下次注意膝盖稳定。"
               className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium leading-6 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
             />
           </div>
@@ -380,8 +342,8 @@ export function AddMemberModal({ isOpen, onClose, state, onUpdateState }: ModalP
       avatar: gender === 'male'
         ? 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=200&auto=format&fit=crop'
         : 'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=200&auto=format&fit=crop',
-      joinDate: new Date().toISOString().split('T')[0],
-      note: note.trim() || '新录入学员，暂无备注。',
+      joinDate: formatLocalDate(),
+      note: note.trim(),
       status: 'active',
     };
 
@@ -474,12 +436,12 @@ export function AddMemberModal({ isOpen, onClose, state, onUpdateState }: ModalP
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-650 mb-1.5">基础体态评估及训练方向</label>
+            <label className="block text-xs font-bold text-slate-650 mb-1.5">备注（选填）</label>
             <textarea
               rows={3}
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="例：零基础，想要臀大肌塑形及纤细手臂；久坐有轻微骨盆前倾，上背有酸痛感。"
+              placeholder="微信名、上课习惯或其他需要记住的事。"
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 text-sm font-medium transition-all"
             />
           </div>
@@ -506,13 +468,22 @@ export function AddMemberModal({ isOpen, onClose, state, onUpdateState }: ModalP
   );
 }
 
-// 3. Log Payment Modal (收学费登记新课包)
-export function LogPaymentModal({ isOpen, onClose, state, onUpdateState, currentCoach }: ModalProps) {
-  const [packName, setPackName] = useState('私教课 20节');
+// 3. Log Payment Modal (登记收款并创建课包)
+export function LogPaymentModal({
+  isOpen,
+  onClose,
+  state,
+  onUpdateState,
+  currentCoach,
+  initialMemberId,
+}: ModalProps) {
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
-  const [totalSessions, setTotalSessions] = useState(20);
-  const [price, setPrice] = useState(8000);
-  const [amount, setAmount] = useState(8000);
+  const [purchasedSessions, setPurchasedSessions] = useState(20);
+  const [giftedSessions, setGiftedSessions] = useState(0);
+  const [receivableAmount, setReceivableAmount] = useState(8000);
+  const [actualAmount, setActualAmount] = useState(8000);
+  const [differenceReason, setDifferenceReason] = useState('');
+  const [customPackName, setCustomPackName] = useState('');
   const [payerName, setPayerName] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'wechat' | 'alipay' | 'cash' | 'bank'>('wechat');
   const [receiver, setReceiver] = useState<Coach>(currentCoach || '力王');
@@ -520,78 +491,97 @@ export function LogPaymentModal({ isOpen, onClose, state, onUpdateState, current
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (isOpen && state.members.length > 0) {
-      setSelectedMemberIds([state.members[0].id]);
-      setPayerName(state.members[0].name);
-      setError('');
-    }
-  }, [isOpen, state.members]);
+    if (!isOpen) return;
+    const targetMember = state.members.find((member) => member.id === initialMemberId) || state.members[0];
+    setSelectedMemberIds(targetMember ? [targetMember.id] : []);
+    setPayerName(targetMember?.name || '');
+    setPurchasedSessions(20);
+    setGiftedSessions(0);
+    setReceivableAmount(8000);
+    setActualAmount(8000);
+    setDifferenceReason('');
+    setCustomPackName('');
+    setPaymentMethod('wechat');
+    setReceiver(currentCoach || '力王');
+    setNote('');
+    setError('');
+  }, [currentCoach, initialMemberId, isOpen, state.members]);
 
   if (!isOpen) return null;
 
+  const totalSessions = purchasedSessions + giftedSessions;
+  const generatedPackName = `私教课 ${totalSessions}节`;
+  const finalPackName = customPackName.trim() || generatedPackName;
+  const amountDifference = receivableAmount - actualAmount;
+
   const toggleMemberSelection = (id: string) => {
-    setSelectedMemberIds((prev) => {
-      const next = prev.includes(id) ? prev.filter((mid) => mid !== id) : [...prev, id];
-      // Automatically update payer to first selected member
-      if (next.length > 0 && !next.includes(state.members.find(m => m.name === payerName)?.id || '')) {
-        const firstMem = state.members.find(m => m.id === next[0]);
-        if (firstMem) setPayerName(firstMem.name);
+    setSelectedMemberIds((current) => {
+      const next = current.includes(id) ? current.filter((memberId) => memberId !== id) : [...current, id];
+      const currentPayer = state.members.find((member) => member.name === payerName);
+      if (!currentPayer || !next.includes(currentPayer.id)) {
+        setPayerName(state.members.find((member) => member.id === next[0])?.name || '');
       }
       return next;
     });
   };
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = (event: React.FormEvent) => {
+    event.preventDefault();
     if (selectedMemberIds.length === 0) {
-      setError('必须至少绑定一个学员 (此课包可绑定多个家庭/伙伴学员共享扣课)');
+      setError('请至少选择一位使用课包的学员。');
       return;
     }
-    if (!packName.trim()) {
-      setError('请填写课包名称');
+    if (purchasedSessions <= 0) {
+      setError('已购课时必须大于 0。');
       return;
     }
-    if (totalSessions <= 0) {
-      setError('总课时数必须大于 0');
+    if (giftedSessions < 0) {
+      setError('赠送课时不能小于 0。');
       return;
     }
-    if (price <= 0) {
-      setError('标价必须大于 0');
+    if (receivableAmount <= 0 || actualAmount < 0) {
+      setError('请检查应收和实收金额。');
       return;
     }
-    if (amount < 0) {
-      setError('实收金额不能小于 0');
+    if (amountDifference !== 0 && !differenceReason.trim()) {
+      setError('应收与实收不一致时，请写明差额原因。');
       return;
     }
     if (!payerName.trim()) {
-      setError('请指定缴费付款人姓名');
+      setError('请填写付款人。');
       return;
     }
 
     const newPackId = generateId('p');
-    
-    // 1. Create course pack
+    const today = formatLocalDate();
     const newPack: CoursePack = {
       id: newPackId,
-      name: packName.trim(),
+      name: finalPackName,
       totalSessions,
       remainingSessions: totalSessions,
-      price,
-      purchaseDate: new Date().toISOString().split('T')[0],
+      purchasedSessions,
+      giftedSessions,
+      remainingPurchasedSessions: purchasedSessions,
+      remainingGiftedSessions: giftedSessions,
+      price: receivableAmount,
+      purchaseDate: today,
+      expiresAt: null,
       memberIds: selectedMemberIds,
       status: 'active',
     };
 
-    // 2. Create Payment log
     const newPaymentLog: PaymentLog = {
       id: generateId('pay'),
       coursePackId: newPackId,
-      coursePackName: packName.trim(),
-      amount,
-      payDate: new Date().toISOString().split('T')[0],
+      coursePackName: finalPackName,
+      amount: actualAmount,
+      receivableAmount,
+      discountAmount: Math.max(0, amountDifference),
+      discountReason: amountDifference === 0 ? '' : differenceReason.trim(),
+      payDate: today,
       payerName: payerName.trim(),
       paymentMethod,
-      note: note.trim() || '全款购买课包，交易入账。',
+      note: note.trim(),
       receiver,
     };
 
@@ -600,205 +590,228 @@ export function LogPaymentModal({ isOpen, onClose, state, onUpdateState, current
       coursePacks: [...state.coursePacks, newPack],
       paymentLogs: [newPaymentLog, ...state.paymentLogs],
     });
-
-    // Reset
-    setPackName('私教课 20节');
-    setTotalSessions(20);
-    setPrice(8000);
-    setAmount(8000);
-    setNote('');
-    setError('');
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
-        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center border border-indigo-100">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+      <div className="flex max-h-[94vh] w-full max-w-xl flex-col overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:rounded-lg">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
               <DollarSign className="h-4 w-4" />
             </div>
-            <h2 className="text-lg font-bold text-slate-850">开通课包 & 登记缴费</h2>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">记收款并开课包</h2>
+              <p className="text-sm text-slate-500">微信到账后，顺手把课时记清楚</p>
+            </div>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition-colors">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+            aria-label="关闭收款登记"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSave} className="p-6 space-y-4 overflow-y-auto flex-1">
+        <form onSubmit={handleSave} className="flex-1 space-y-5 overflow-y-auto p-5">
           {error && (
-            <div className="p-3 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl text-xs font-bold animate-shake">
-              {error}
+            <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+              <Info className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
-          {/* Member Binder (Multi-select) */}
-          <div>
-            <div className="flex justify-between items-center mb-1">
-              <label className="block text-xs font-bold text-slate-650">
-                绑定上课学员 (支持多选，全家多口人共享课时) *
-              </label>
-              <span className="text-[10px] text-slate-400 font-bold">点选以勾选/取消</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200/60 shadow-xs">
-              {state.members.map((m) => {
-                const isSelected = selectedMemberIds.includes(m.id);
+          <fieldset>
+            <legend className="mb-2 text-sm font-bold text-slate-700">
+              谁可以用这个课包 <span className="font-medium text-slate-400">（可多选共享）</span>
+            </legend>
+            <div className="grid max-h-36 grid-cols-2 gap-2 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2 sm:grid-cols-3">
+              {state.members.map((member) => {
+                const selected = selectedMemberIds.includes(member.id);
                 return (
                   <button
-                    key={m.id}
+                    key={member.id}
                     type="button"
-                    onClick={() => toggleMemberSelection(m.id)}
-                    className={`px-3 py-1.5 rounded-lg border text-left text-xs flex justify-between items-center transition-all cursor-pointer font-bold ${
-                      isSelected
-                        ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                        : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 shadow-xs'
+                    onClick={() => toggleMemberSelection(member.id)}
+                    className={`flex min-h-10 items-center justify-between rounded-md border px-3 text-sm font-bold ${
+                      selected
+                        ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                     }`}
+                    aria-pressed={selected}
                   >
-                    <span>{m.name}</span>
-                    {isSelected && <Check className="h-3.5 w-3.5" />}
+                    <span className="truncate">{member.name}</span>
+                    {selected && <Check className="h-4 w-4 shrink-0" />}
                   </button>
                 );
               })}
             </div>
-          </div>
+          </fieldset>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-650 mb-1.5">新课包名称 *</label>
-            <input
-              type="text"
-              placeholder="例如：私教课 40节 (共享版)"
-              value={packName}
-              onChange={(e) => setPackName(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 text-sm font-medium transition-all"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-650 mb-1.5">总课时 (节数) *</label>
+              <label className="mb-1.5 block text-sm font-bold text-slate-700" htmlFor="payment-purchased">已购课时</label>
               <input
+                id="payment-purchased"
                 type="number"
-                value={totalSessions}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value) || 0;
-                  setTotalSessions(val);
-                }}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 font-mono text-sm font-medium transition-all"
-                required
+                min={1}
+                value={purchasedSessions}
+                onChange={(event) => setPurchasedSessions(parseInt(event.target.value, 10) || 0)}
+                className="min-h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-500"
               />
             </div>
-
             <div>
-              <label className="block text-xs font-bold text-slate-650 mb-1.5">课包官方标价 (元) *</label>
+              <label className="mb-1.5 block text-sm font-bold text-slate-700" htmlFor="payment-gifted">赠送课时</label>
               <input
+                id="payment-gifted"
                 type="number"
-                value={price}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value) || 0;
-                  setPrice(val);
-                  setAmount(val); // default sync amount
-                }}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 font-mono text-sm font-medium transition-all"
-                required
+                min={0}
+                value={giftedSessions}
+                onChange={(event) => setGiftedSessions(parseInt(event.target.value, 10) || 0)}
+                className="min-h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-bold text-slate-700" htmlFor="payment-receivable">应收金额</label>
+              <input
+                id="payment-receivable"
+                type="number"
+                min={0}
+                value={receivableAmount}
+                onChange={(event) => setReceivableAmount(Number(event.target.value) || 0)}
+                className="min-h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-bold text-slate-700" htmlFor="payment-actual">实收金额</label>
+              <input
+                id="payment-actual"
+                type="number"
+                min={0}
+                value={actualAmount}
+                onChange={(event) => setActualAmount(Number(event.target.value) || 0)}
+                className="min-h-11 w-full rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-sm font-bold text-emerald-900 outline-none focus:border-emerald-500"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-650 mb-1.5">实收缴费金额 (元) *</label>
+          {amountDifference !== 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <label className="mb-1.5 block text-sm font-bold text-amber-900" htmlFor="payment-difference-reason">
+                {amountDifference > 0 ? `少收 ${amountDifference} 元，原因` : `多收 ${Math.abs(amountDifference)} 元，原因`}
+              </label>
               <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(parseInt(e.target.value) || 0)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 font-mono text-sm font-medium transition-all"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-650 mb-1.5">缴费付款人姓名 *</label>
-              <input
+                id="payment-difference-reason"
                 type="text"
-                placeholder="例如：张大姐"
-                value={payerName}
-                onChange={(e) => setPayerName(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 text-sm font-medium transition-all"
-                required
+                value={differenceReason}
+                onChange={(event) => setDifferenceReason(event.target.value)}
+                placeholder="例如：老学员优惠"
+                className="min-h-10 w-full rounded-lg border border-amber-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-amber-500"
               />
             </div>
+          )}
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            将创建 <strong className="text-slate-900">{finalPackName}</strong>，共{' '}
+            <strong className="text-slate-900">{totalSessions} 节</strong>，默认无限期。
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-650 mb-1.5">交易支付渠道</label>
-            <div className="grid grid-cols-4 gap-2">
-              {[
-                { key: 'wechat', name: '微信' },
-                { key: 'alipay', name: '支付宝' },
-                { key: 'bank', name: '银行卡' },
-                { key: 'cash', name: '现金' },
-              ].map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setPaymentMethod(item.key as any)}
-                  className={`py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center ${
-                    paymentMethod === item.key
-                      ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                      : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 shadow-xs'
-                  }`}
-                >
-                  {item.name}
-                </button>
-              ))}
+          <details className="rounded-lg border border-slate-200 bg-white">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-700">付款人与其他信息</summary>
+            <div className="space-y-4 border-t border-slate-200 p-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-600" htmlFor="payment-payer">付款人</label>
+                  <input
+                    id="payment-payer"
+                    type="text"
+                    value={payerName}
+                    onChange={(event) => setPayerName(event.target.value)}
+                    className="min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm text-slate-900 outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-600" htmlFor="payment-receiver">登记人</label>
+                  <select
+                    id="payment-receiver"
+                    value={receiver}
+                    onChange={(event) => setReceiver(event.target.value as Coach)}
+                    className="min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-indigo-500"
+                  >
+                    <option value="力王">力王</option>
+                    <option value="花花">花花</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <span className="mb-1.5 block text-sm font-semibold text-slate-600">付款方式</span>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { key: 'wechat', name: '微信' },
+                    { key: 'alipay', name: '支付宝' },
+                    { key: 'bank', name: '银行卡' },
+                    { key: 'cash', name: '现金' },
+                  ].map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setPaymentMethod(item.key as typeof paymentMethod)}
+                      className={`min-h-9 rounded-md border text-xs font-bold ${
+                        paymentMethod === item.key
+                          ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
+                          : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                      }`}
+                    >
+                      {item.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-slate-600" htmlFor="payment-pack-name">课包名称（选填）</label>
+                <input
+                  id="payment-pack-name"
+                  type="text"
+                  value={customPackName}
+                  onChange={(event) => setCustomPackName(event.target.value)}
+                  placeholder={generatedPackName}
+                  className="min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm text-slate-900 outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-slate-600" htmlFor="payment-note">备注（选填）</label>
+                <input
+                  id="payment-note"
+                  type="text"
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                  placeholder="例如：家属代付"
+                  className="min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm text-slate-900 outline-none focus:border-indigo-500"
+                />
+              </div>
             </div>
-          </div>
+          </details>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-655 text-slate-600 mb-1.5">收款负责人 *</label>
-              <select
-                value={receiver}
-                onChange={(e) => setReceiver(e.target.value as Coach)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 text-xs font-bold transition-all"
-              >
-                <option value="力王">力王 (主教练)</option>
-                <option value="花花">花花 (主教练)</option>
-              </select>
-            </div>
-            <div className="flex flex-col justify-center">
-              <span className="text-[10px] text-slate-400 font-bold mb-0.5">夫妻工作室对账对齐:</span>
-              <span className="text-[10px] text-slate-400 leading-tight">登记后将记入对应合伙人的实收名下</span>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-650 mb-1.5">缴费备注 (如转账凭证、折扣原因等)</label>
-            <input
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="例：丈夫替其付，大额优惠 300 元。"
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-450 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 text-sm font-medium transition-all"
-            />
-          </div>
-
-          <div className="pt-2 flex gap-3">
+          <div className="flex gap-3 pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-500 font-bold rounded-xl text-center cursor-pointer text-sm shadow-xs transition-colors"
+              className="min-h-11 flex-1 rounded-lg border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50"
             >
               取消
             </button>
             <button
               type="submit"
-              className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-center flex items-center justify-center gap-1 cursor-pointer text-sm shadow-sm transition-all"
+              className="inline-flex min-h-11 flex-[1.5] items-center justify-center gap-2 rounded-lg bg-emerald-600 text-sm font-bold text-white hover:bg-emerald-700"
             >
-              <Check className="h-4 w-4 stroke-[2.5]" />
-              开课并入账
+              <Check className="h-4 w-4" />
+              保存收款与课包
             </button>
           </div>
         </form>

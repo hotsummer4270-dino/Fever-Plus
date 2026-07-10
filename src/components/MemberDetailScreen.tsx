@@ -19,9 +19,16 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { GymState, Member, ClassLog, CoursePack, PaymentLog, TrainingPlan, PlanDay, Exercise } from '../types';
-import { formatCurrency, formatDateTime, formatLocalDate, generateId } from '../utils';
+import {
+  formatCurrency,
+  formatLocalDate,
+  generateId,
+  getGiftedSessions,
+  getPurchasedSessions,
+  getRemainingGiftedSessions,
+  getRemainingPurchasedSessions,
+} from '../utils';
 import DefaultAvatar from './DefaultAvatar';
-import TrainingActivityMap from './TrainingActivityMap';
 
 interface MemberDetailScreenProps {
   memberId: string;
@@ -29,6 +36,7 @@ interface MemberDetailScreenProps {
   onBack: () => void;
   onUpdateState: (newState: GymState) => void;
   onOpenLogClass: () => void;
+  onOpenLogPayment: () => void;
 }
 
 export default function MemberDetailScreen({
@@ -37,6 +45,7 @@ export default function MemberDetailScreen({
   onBack,
   onUpdateState,
   onOpenLogClass,
+  onOpenLogPayment,
 }: MemberDetailScreenProps) {
   const parseDayTitle = (dayTitle: string) => {
     const index = dayTitle.indexOf(' | ');
@@ -49,7 +58,7 @@ export default function MemberDetailScreen({
   };
 
   const member = state.members.find((m) => m.id === memberId);
-  const [subTab, setSubTab] = useState<'plan' | 'logs' | 'packs' | 'profile'>('plan');
+  const [subTab, setSubTab] = useState<'plan' | 'logs' | 'packs' | 'profile'>('logs');
   
   // States for Editing profile
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -87,13 +96,15 @@ export default function MemberDetailScreen({
   }
 
   // Filter logs specifically for this member
-  const memberClassLogs = state.classLogs.filter((l) => l.memberId === member.id);
+  const memberClassLogs = state.classLogs
+    .filter((l) => l.memberId === member.id)
+    .sort((a, b) => b.date.localeCompare(a.date));
   const memberPacks = state.coursePacks.filter((p) => p.memberIds.includes(member.id));
   const memberPayments = state.paymentLogs.filter((p) => {
     // Linked either directly to member's packs
     const packIds = memberPacks.map(mp => mp.id);
     return packIds.includes(p.coursePackId) || p.payerName === member.name;
-  });
+  }).sort((a, b) => b.payDate.localeCompare(a.payDate));
   const memberPlans = state.trainingPlans.filter((p) => p.memberId === member.id);
   const activePlan = memberPlans.find((p) => p.isActive);
 
@@ -235,13 +246,22 @@ export default function MemberDetailScreen({
           <ArrowLeft className="h-4 w-4" />
           返回学员列表
         </button>
-        <button
-          onClick={onOpenLogClass}
-          className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-bold text-white transition-colors hover:bg-indigo-700"
-        >
-          <ClipboardCheck className="h-4 w-4" />
-          给该学员消课
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={onOpenLogClass}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-bold text-white transition-colors hover:bg-indigo-700"
+          >
+            <ClipboardCheck className="h-4 w-4" />
+            记消课
+          </button>
+          <button
+            onClick={onOpenLogPayment}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white transition-colors hover:bg-emerald-700"
+          >
+            <DollarSign className="h-4 w-4" />
+            记收款
+          </button>
+        </div>
       </div>
 
       {/* Member Profile Card */}
@@ -290,8 +310,8 @@ export default function MemberDetailScreen({
               </div>
 
               <p className="mt-2 max-w-2xl rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm font-medium leading-6 text-slate-650">
-                <b className="mb-0.5 block font-bold text-slate-500">训练备注 / 评估主诉</b>
-                {member.note || '暂未添加该学员的基础体征和评测记录。'}
+                <b className="mb-0.5 block font-bold text-slate-500">备注</b>
+                {member.note || '暂无备注'}
               </p>
             </div>
           </div>
@@ -315,16 +335,13 @@ export default function MemberDetailScreen({
         </div>
       </div>
 
-      {/* Training Activity Grid Map */}
-      <TrainingActivityMap classLogs={memberClassLogs} joinDate={member.joinDate} />
-
       {/* Sub Tabs Navigation */}
       <div className="flex gap-5 overflow-x-auto border-b border-slate-200">
         {[
-          { key: 'plan', name: '专属训练计划', icon: Dumbbell },
-          { key: 'logs', name: '历史消课记录', icon: ClipboardCheck },
-          { key: 'packs', name: '名下课包与账单', icon: DollarSign },
-          { key: 'profile', name: '编辑学员档案', icon: Notebook },
+          { key: 'logs', name: '消课记录', icon: ClipboardCheck },
+          { key: 'packs', name: '课包与收款', icon: DollarSign },
+          { key: 'plan', name: '训练计划', icon: Dumbbell },
+          { key: 'profile', name: '基本资料', icon: Notebook },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = subTab === tab.key;
@@ -669,7 +686,7 @@ export default function MemberDetailScreen({
                     </div>
 
                     <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 font-medium whitespace-pre-wrap leading-relaxed">
-                      {log.content}
+                      {log.content || '未填写上课备注'}
                     </p>
                   </div>
                 ))}
@@ -692,6 +709,10 @@ export default function MemberDetailScreen({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {memberPacks.map((pack) => {
                     const cleanPackName = pack.name.includes('私教课') ? pack.name : `私教课 ${pack.totalSessions}节`;
+                    const purchasedSessions = getPurchasedSessions(pack);
+                    const giftedSessions = getGiftedSessions(pack);
+                    const remainingPurchased = getRemainingPurchasedSessions(pack);
+                    const remainingGifted = getRemainingGiftedSessions(pack);
                     return (
                       <div key={pack.id} className="bg-white border border-slate-200 p-4 rounded-xl flex flex-col justify-between shadow-sm">
                         <div>
@@ -725,12 +746,20 @@ export default function MemberDetailScreen({
 
                         <div className="mt-5 pt-3 border-t border-slate-100 flex justify-between items-end font-mono">
                           <div>
-                            <span className="text-[9px] text-slate-400 block font-semibold">课包金额</span>
+                            <span className="text-[9px] text-slate-400 block font-semibold">应收金额</span>
                             <span className="text-xs font-bold text-slate-700">{formatCurrency(pack.price)}</span>
                           </div>
                           <div className="text-right">
                             <span className="text-[9px] text-slate-400 block font-semibold">剩余课时</span>
                             <span className="text-sm font-extrabold text-emerald-600">{pack.remainingSessions} / {pack.totalSessions} 节</span>
+                          </div>
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                          <div className="rounded-lg bg-slate-50 px-3 py-2 text-slate-600">
+                            已购 <strong className="text-slate-900">{remainingPurchased} / {purchasedSessions}</strong> 节
+                          </div>
+                          <div className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-700">
+                            赠送 <strong>{remainingGifted} / {giftedSessions}</strong> 节
                           </div>
                         </div>
                       </div>
@@ -753,7 +782,7 @@ export default function MemberDetailScreen({
                     <span className="col-span-3">买课日期</span>
                     <span className="col-span-4">购买内容</span>
                     <span className="col-span-2">渠道</span>
-                    <span className="col-span-3 text-right">到账学费</span>
+                    <span className="col-span-3 text-right">应收 / 实收</span>
                   </div>
                   <div className="divide-y divide-slate-100">
                     {memberPayments.map((pay) => {
@@ -765,7 +794,11 @@ export default function MemberDetailScreen({
                           <span className="col-span-2 text-slate-500 font-sans font-semibold">
                             {pay.paymentMethod === 'wechat' ? '微信' : pay.paymentMethod === 'alipay' ? '支付宝' : pay.paymentMethod === 'bank' ? '银行卡' : '现金'}
                           </span>
-                          <span className="col-span-3 text-right text-emerald-600 font-bold">{formatCurrency(pay.amount)}</span>
+                          <span className="col-span-3 text-right font-bold">
+                            <span className="text-slate-500">{formatCurrency(pay.receivableAmount ?? pay.amount)}</span>
+                            <span className="mx-1 text-slate-300">/</span>
+                            <span className="text-emerald-600">{formatCurrency(pay.amount)}</span>
+                          </span>
                           {pay.note && (
                             <span className="col-span-12 text-[10px] text-slate-400 font-sans italic mt-1 pl-1 font-medium">
                               备注: {pay.note}
@@ -841,7 +874,7 @@ export default function MemberDetailScreen({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-650 mb-1.5">体征评测与专项备注</label>
+              <label className="block text-xs font-bold text-slate-650 mb-1.5">备注</label>
               <textarea
                 rows={4}
                 value={editNote}

@@ -16,17 +16,25 @@ export interface CoursePack {
   name: string; // e.g., "常规力量私教课 30节"
   totalSessions: number;
   remainingSessions: number;
-  price: number;
+  purchasedSessions?: number;
+  giftedSessions?: number;
+  remainingPurchasedSessions?: number;
+  remainingGiftedSessions?: number;
+  price: number; // Receivable amount for the package
   purchaseDate: string;
+  expiresAt?: string | null; // null means valid indefinitely
   memberIds: string[]; // Can be bound to multiple members (e.g. family package)
-  status: 'active' | 'completed' | 'refunded';
+  status: 'active' | 'completed' | 'frozen' | 'refunded';
 }
 
 export interface PaymentLog {
   id: string;
   coursePackId: string;
   coursePackName: string;
-  amount: number;
+  amount: number; // Actual amount received
+  receivableAmount?: number;
+  discountAmount?: number;
+  discountReason?: string;
   payDate: string;
   payerName: string;
   paymentMethod: 'wechat' | 'alipay' | 'cash' | 'bank';
@@ -45,6 +53,8 @@ export interface ClassLog {
   duration: number; // minutes, e.g., 60
   content: string; // detailed training content
   sessionCount: number; // usually 1
+  deductedPurchasedSessions?: number;
+  deductedGiftedSessions?: number;
 }
 
 export interface Exercise {
@@ -71,6 +81,7 @@ export interface TrainingPlan {
 }
 
 export interface GymState {
+  schemaVersion?: number;
   members: Member[];
   coursePacks: CoursePack[];
   paymentLogs: PaymentLog[];
