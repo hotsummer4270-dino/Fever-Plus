@@ -6,4 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+!.env.local.example
 .vercel
+.dev.vars
+.wrangler
+.playwright-cli

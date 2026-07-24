@@ -65,9 +65,11 @@ export default function MemberReportModal({
       if (member.gender === 'male') {
         prList.push('核心硬拉控制 (良好)');
         prList.push('力量推胸突破 (持续中)');
-      } else {
+      } else if (member.gender === 'female') {
         prList.push('臀腿核心激活 (极佳)');
         prList.push('体态脊柱梳理 (改善明显)');
+      } else {
+        prList.push('训练记录待补充');
       }
     }
     return prList;
@@ -196,7 +198,9 @@ export default function MemberReportModal({
             <p className="text-[10px] text-slate-600 leading-relaxed italic font-medium">
               "{member.gender === 'female' 
                 ? '花花教练：看到你在拉伸平衡和核心姿势控制上的巨大蜕变。每一次发力都更加精准，继续坚持，你正在塑造更完美的体态！' 
-                : '力王教练：对待训练绝对严谨，大重量深蹲和硬拉动作标准！核心日渐扎实。让我们继续冲刺下一个最大极限重量，加油！'}"
+                : member.gender === 'male'
+                  ? '力王教练：对待训练绝对严谨，大重量深蹲和硬拉动作标准！核心日渐扎实。让我们继续冲刺下一个最大极限重量，加油！'
+                  : '教练：从每一次认真完成的训练开始，我们会一起记录你的进步。'}"
             </p>
           </div>
 

@@ -3,7 +3,7 @@ import { INITIAL_GYM_STATE } from './initialData';
 
 const LOCAL_STORAGE_KEY = 'lh_studio_gym_state';
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 export function getPurchasedSessions(pack: CoursePack): number {
   return pack.purchasedSessions ?? pack.totalSessions;
@@ -59,6 +59,7 @@ export function normalizeGymState(state: GymState): GymState {
     paymentLogs: normalizedPayments,
     classLogs: state.classLogs || [],
     trainingPlans: state.trainingPlans || [],
+    appointments: state.appointments || [],
   };
 }
 
@@ -223,6 +224,52 @@ export interface DashboardStats {
   recentPaymentLogs: PaymentLog[];
   revenueByMonth: { month: string; amount: number }[];
   classesByCoach: { coach: string; count: number }[];
+}
+
+export interface LowSessionAttention {
+  member: Member;
+  remaining: number;
+}
+
+export interface InactiveMemberAttention {
+  member: Member;
+  days: number;
+}
+
+export function getMemberAttention(state: GymState, now = new Date()): {
+  lowSessionMembers: LowSessionAttention[];
+  inactiveMembers: InactiveMemberAttention[];
+} {
+  const activeMembers = state.members.filter((member) => member.status === 'active');
+  const activePacks = state.coursePacks.filter((pack) => pack.status === 'active' && pack.remainingSessions > 0);
+  const lowSessionMembers = activeMembers
+    .map((member) => ({
+      member,
+      remaining: activePacks
+        .filter((pack) => pack.memberIds.includes(member.id))
+        .reduce((sum, pack) => sum + pack.remainingSessions, 0),
+    }))
+    .filter(({ remaining }) => remaining > 0 && remaining <= 5)
+    .sort((a, b) => a.remaining - b.remaining);
+
+  const latestClassByMember = new Map<string, string>();
+  [...state.classLogs]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .forEach((log) => {
+      if (!latestClassByMember.has(log.memberId)) latestClassByMember.set(log.memberId, log.date);
+    });
+  const inactiveMembers = activeMembers
+    .flatMap((member) => {
+      const latestClass = latestClassByMember.get(member.id);
+      if (!latestClass) return [];
+      const activityDate = new Date(latestClass.replace(' ', 'T'));
+      if (Number.isNaN(activityDate.getTime())) return [];
+      const days = Math.max(0, Math.floor((now.getTime() - activityDate.getTime()) / 86_400_000));
+      return days >= 30 ? [{ member, days }] : [];
+    })
+    .sort((a, b) => b.days - a.days);
+
+  return { lowSessionMembers, inactiveMembers };
 }
 
 export function computeDashboardStats(state: GymState): DashboardStats {

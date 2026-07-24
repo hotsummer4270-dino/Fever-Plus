@@ -37,6 +37,10 @@ interface MemberDetailScreenProps {
   onUpdateState: (newState: GymState) => void;
   onOpenLogClass: () => void;
   onOpenLogPayment: () => void;
+  onUpdateMember?: (memberId: string, member: Pick<Member, 'name' | 'phone' | 'gender' | 'note' | 'status'>) => Promise<void>;
+  onSaveTrainingPlan?: (plan: { memberId: string; title: string; days: PlanDay[]; date: string }) => Promise<void>;
+  onDeleteTrainingPlan?: (planId: string) => Promise<void>;
+  onActivateTrainingPlan?: (planId: string) => Promise<void>;
 }
 
 export default function MemberDetailScreen({
@@ -46,6 +50,10 @@ export default function MemberDetailScreen({
   onUpdateState,
   onOpenLogClass,
   onOpenLogPayment,
+  onUpdateMember,
+  onSaveTrainingPlan,
+  onDeleteTrainingPlan,
+  onActivateTrainingPlan,
 }: MemberDetailScreenProps) {
   const parseDayTitle = (dayTitle: string) => {
     const index = dayTitle.indexOf(' | ');
@@ -64,7 +72,7 @@ export default function MemberDetailScreen({
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
-  const [editGender, setEditGender] = useState<'male' | 'female'>('female');
+  const [editGender, setEditGender] = useState<Member['gender']>('unknown');
   const [editNote, setEditNote] = useState('');
 
   // States for Training Plan Builder
@@ -115,7 +123,16 @@ export default function MemberDetailScreen({
   const completedLessons = memberClassLogs.reduce((sum, log) => sum + log.sessionCount, 0);
 
   // Save profile changes
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
+    if (onUpdateMember) {
+      try {
+        await onUpdateMember(member.id, { name: editName, phone: editPhone, gender: editGender, note: editNote, status: member.status });
+        setIsEditingProfile(false);
+      } catch (requestError) {
+        window.alert(requestError instanceof Error ? requestError.message : '资料保存失败，请稍后重试。');
+      }
+      return;
+    }
     const updatedMembers = state.members.map((m) => {
       if (m.id === member.id) {
         return {
@@ -174,7 +191,7 @@ export default function MemberDetailScreen({
   };
 
   // Save training plan
-  const handleSavePlan = (e: React.FormEvent) => {
+  const handleSavePlan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!planTitle.trim()) return;
 
@@ -186,6 +203,18 @@ export default function MemberDetailScreen({
 
     if (cleanDays.length === 0) {
       alert('计划中必须包含至少一个填有名称的训练动作！');
+      return;
+    }
+
+    if (onSaveTrainingPlan) {
+      try {
+        await onSaveTrainingPlan({ memberId: member.id, title: planTitle.trim(), days: cleanDays, date: formatLocalDate() });
+        setIsBuildingPlan(false);
+        setPlanTitle('');
+        setPlanDays([{ dayTitle: `${todayDateStr} | 全身力量训练`, exercises: [{ name: '', sets: 4, reps: '10', weight: '20kg', note: '' }] }]);
+      } catch (requestError) {
+        window.alert(requestError instanceof Error ? requestError.message : '训练计划保存失败，请稍后重试。');
+      }
       return;
     }
 
@@ -217,7 +246,15 @@ export default function MemberDetailScreen({
     setPlanDays([{ dayTitle: `${todayDateStr} | 全身力量训练`, exercises: [{ name: '', sets: 4, reps: '10', weight: '20kg', note: '' }] }]);
   };
 
-  const deletePlan = (planId: string) => {
+  const deletePlan = async (planId: string) => {
+    if (onDeleteTrainingPlan) {
+      try {
+        await onDeleteTrainingPlan(planId);
+      } catch (requestError) {
+        window.alert(requestError instanceof Error ? requestError.message : '训练计划删除失败，请稍后重试。');
+      }
+      return;
+    }
     onUpdateState({
       ...state,
       trainingPlans: state.trainingPlans.filter(p => p.id !== planId)
@@ -276,19 +313,19 @@ export default function MemberDetailScreen({
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-bold text-slate-900">{member.name}</h2>
                 <span className={`p-1 rounded-lg ${
-                  member.gender === 'female' ? 'bg-rose-50 text-rose-600' : 'bg-blue-50 text-blue-600'
-                }`} title={member.gender === 'female' ? '女性' : '男性'}>
+                  member.gender === 'female' ? 'bg-rose-50 text-rose-600' : member.gender === 'male' ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-500'
+                }`} title={member.gender === 'female' ? '女性' : member.gender === 'male' ? '男性' : '性别未登记'}>
                   {member.gender === 'female' ? (
                     <svg viewBox="0 0 24 24" className="h-4 w-4 text-rose-500 shrink-0" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="12" cy="10" r="5" />
                       <path d="M12 15v7M9 19h6" />
                     </svg>
-                  ) : (
+                  ) : member.gender === 'male' ? (
                     <svg viewBox="0 0 24 24" className="h-4 w-4 text-blue-500 shrink-0" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="10" cy="14" r="5" />
                       <path d="M14 10l6-6M14 4h6v6" />
                     </svg>
-                  )}
+                  ) : <span className="px-0.5 text-xs font-black">?</span>}
                 </span>
                 {sharedName && (
                   <span className="flex items-center gap-1 rounded-md border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-700">
@@ -460,7 +497,15 @@ export default function MemberDetailScreen({
                           <span className="font-medium">{p.title} (定制日期: {p.createdAt})</span>
                           <div className="flex gap-2">
                             <button
-                              onClick={() => {
+                              onClick={async () => {
+                                if (onActivateTrainingPlan) {
+                                  try {
+                                    await onActivateTrainingPlan(p.id);
+                                  } catch (requestError) {
+                                    window.alert(requestError instanceof Error ? requestError.message : '训练计划启用失败，请稍后重试。');
+                                  }
+                                  return;
+                                }
                                 // Toggle active state
                                 const updated = state.trainingPlans.map(tp => {
                                   if (tp.memberId === member.id) {
@@ -847,7 +892,7 @@ export default function MemberDetailScreen({
 
             <div>
               <label className="block text-xs font-bold text-slate-650 mb-1.5">学员性别</label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <button
                   type="button"
                   onClick={() => setEditGender('female')}
@@ -869,6 +914,17 @@ export default function MemberDetailScreen({
                   }`}
                 >
                   男性
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditGender('unknown')}
+                  className={`py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                    editGender === 'unknown'
+                      ? 'bg-slate-100 border-slate-300 text-slate-700'
+                      : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 shadow-xs'
+                  }`}
+                >
+                  未登记
                 </button>
               </div>
             </div>

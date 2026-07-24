@@ -266,5 +266,6 @@ export const INITIAL_GYM_STATE: GymState = {
         }
       ]
     }
-  ]
+  ],
+  appointments: []
 };

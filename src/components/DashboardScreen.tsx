@@ -10,7 +10,7 @@ import {
   Users,
 } from 'lucide-react';
 import { Coach, GymState } from '../types';
-import { formatCurrency } from '../utils';
+import { formatCurrency, getMemberAttention } from '../utils';
 
 interface DashboardScreenProps {
   state: GymState;
@@ -19,6 +19,7 @@ interface DashboardScreenProps {
   onOpenLogPayment: () => void;
   onNavigateToMember: (memberId: string) => void;
   onNavigateToRecords: (tab: 'logs' | 'payments' | 'packs') => void;
+  onOpenAttention: () => void;
   currentCoach: Coach;
 }
 
@@ -31,6 +32,7 @@ export default function DashboardScreen({
   onOpenLogPayment,
   onNavigateToMember,
   onNavigateToRecords,
+  onOpenAttention,
   currentCoach,
 }: DashboardScreenProps) {
   const now = new Date();
@@ -52,31 +54,7 @@ export default function DashboardScreen({
     0,
   );
 
-  const lowSessionMembers = state.members
-    .map((member) => ({
-      member,
-      remaining: activePacks
-        .filter((pack) => pack.memberIds.includes(member.id))
-        .reduce((sum, pack) => sum + pack.remainingSessions, 0),
-    }))
-    .filter(({ remaining }) => remaining > 0 && remaining <= 5)
-    .sort((a, b) => a.remaining - b.remaining);
-
-  const latestClassByMember = new Map<string, string>();
-  sortedClassLogs.forEach((log) => {
-    if (!latestClassByMember.has(log.memberId)) latestClassByMember.set(log.memberId, log.date);
-  });
-  const inactiveMembers = state.members
-    .map((member) => {
-      const lastActivity = latestClassByMember.get(member.id) || member.joinDate;
-      const activityDate = parseLocalDate(lastActivity);
-      const days = Number.isNaN(activityDate.getTime())
-        ? 0
-        : Math.max(0, Math.floor((now.getTime() - activityDate.getTime()) / 86_400_000));
-      return { member, days, hasClass: latestClassByMember.has(member.id) };
-    })
-    .filter(({ days }) => days >= 30)
-    .sort((a, b) => b.days - a.days);
+  const { lowSessionMembers, inactiveMembers } = getMemberAttention(state, now);
 
   const todayLabel = new Intl.DateTimeFormat('zh-CN', {
     month: 'long',
@@ -170,51 +148,10 @@ export default function DashboardScreen({
       </section>
 
       {(lowSessionMembers.length > 0 || inactiveMembers.length > 0) && (
-        <section className="grid gap-3 lg:grid-cols-2" aria-label="轻提醒">
-          {lowSessionMembers.length > 0 && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <div className="flex gap-3">
-                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-amber-900">{lowSessionMembers.length} 位学员课时不多了</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {lowSessionMembers.map(({ member, remaining }) => (
-                      <button
-                        key={member.id}
-                        onClick={() => onNavigateToMember(member.id)}
-                        className="rounded-md border border-amber-200 bg-white px-2.5 py-1 text-sm font-semibold text-amber-900 hover:border-amber-400"
-                      >
-                        {member.name} · {remaining} 节
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {inactiveMembers.length > 0 && (
-            <div className="rounded-lg border border-slate-200 bg-white p-4">
-              <div className="flex gap-3">
-                <CalendarClock className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-slate-900">有一阵没上课</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {inactiveMembers.slice(0, 6).map(({ member, days, hasClass }) => (
-                      <button
-                        key={member.id}
-                        onClick={() => onNavigateToMember(member.id)}
-                        className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-sm font-semibold text-slate-700 hover:border-slate-400"
-                      >
-                        {member.name} · {hasClass ? `${days} 天` : '还没上过课'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </section>
+        <button onClick={onOpenAttention} className="flex w-full flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 text-left transition-colors hover:border-indigo-300 sm:flex-row sm:items-center sm:justify-between" aria-label="查看需要关注的学员">
+          <span className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-700"><AlertTriangle className="h-5 w-5" /></span><span><strong className="block text-sm text-slate-900">需要关注</strong><span className="mt-0.5 block text-xs text-slate-500">低课时和长期未上课的学员已收进清单</span></span></span>
+          <span className="flex items-center gap-2"><span className="rounded-md bg-amber-50 px-2.5 py-1 text-sm font-bold text-amber-800">课时不多 {lowSessionMembers.length}</span><span className="rounded-md bg-slate-100 px-2.5 py-1 text-sm font-bold text-slate-700">久未上课 {inactiveMembers.length}</span><ChevronRight className="h-4 w-4 text-slate-400" /></span>
+        </button>
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">

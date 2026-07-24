@@ -15,6 +15,12 @@ interface ModalProps {
   onUpdateState: (newState: GymState) => void;
   currentCoach?: Coach;
   initialMemberId?: string;
+  onCreateClass?: (input: Pick<ClassLog, 'memberId' | 'coursePackId' | 'coach' | 'date' | 'duration' | 'content' | 'sessionCount'>) => Promise<void>;
+  onCreateMember?: (member: Member) => Promise<void>;
+  onCreatePayment?: (input: {
+    memberIds: string[]; purchasedSessions: number; giftedSessions: number; receivableAmount: number; actualAmount: number;
+    differenceReason: string; payerName: string; paymentMethod: PaymentLog['paymentMethod']; receiver: Coach; note: string; purchaseDate: string; packName: string;
+  }) => Promise<void>;
 }
 
 // 1. Log Class Modal (消课登记)
@@ -25,6 +31,7 @@ export function LogClassModal({
   onUpdateState,
   currentCoach,
   initialMemberId,
+  onCreateClass,
 }: ModalProps) {
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [selectedPackId, setSelectedPackId] = useState('');
@@ -81,7 +88,7 @@ export function LogClassModal({
     : [];
   const selectedPack = availablePacks.find((pack) => pack.id === selectedPackId);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMemberId) {
       setError('请选择学员');
@@ -94,6 +101,17 @@ export function LogClassModal({
     const pack = state.coursePacks.find((p) => p.id === selectedPackId);
     if (!pack || pack.remainingSessions < sessionCount) {
       setError('所选课包剩余课时不足！');
+      return;
+    }
+
+    if (onCreateClass) {
+      try {
+        await onCreateClass({ memberId: selectedMemberId, coursePackId: selectedPackId, coach, date: dateTime, duration, content: content.trim(), sessionCount });
+        setContent('');
+        onClose();
+      } catch (requestError) {
+        setError(requestError instanceof Error ? requestError.message : '消课保存失败，请稍后重试。');
+      }
       return;
     }
 
@@ -314,7 +332,7 @@ export function LogClassModal({
 }
 
 // 2. Add Member Modal (新增会员)
-export function AddMemberModal({ isOpen, onClose, state, onUpdateState }: ModalProps) {
+export function AddMemberModal({ isOpen, onClose, state, onUpdateState, onCreateMember }: ModalProps) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [gender, setGender] = useState<'male' | 'female'>('female');
@@ -323,7 +341,7 @@ export function AddMemberModal({ isOpen, onClose, state, onUpdateState }: ModalP
 
   if (!isOpen) return null;
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       setError('请输入会员姓名');
@@ -347,7 +365,14 @@ export function AddMemberModal({ isOpen, onClose, state, onUpdateState }: ModalP
       status: 'active',
     };
 
-    onUpdateState({
+    if (onCreateMember) {
+      try {
+        await onCreateMember(newMember);
+      } catch (requestError) {
+        setError(requestError instanceof Error ? requestError.message : '学员创建失败，请稍后重试。');
+        return;
+      }
+    } else onUpdateState({
       ...state,
       members: [...state.members, newMember],
     });
@@ -476,6 +501,7 @@ export function LogPaymentModal({
   onUpdateState,
   currentCoach,
   initialMemberId,
+  onCreatePayment,
 }: ModalProps) {
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [purchasedSessions, setPurchasedSessions] = useState(20);
@@ -525,7 +551,7 @@ export function LogPaymentModal({
     });
   };
 
-  const handleSave = (event: React.FormEvent) => {
+  const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
     if (selectedMemberIds.length === 0) {
       setError('请至少选择一位使用课包的学员。');
@@ -549,6 +575,20 @@ export function LogPaymentModal({
     }
     if (!payerName.trim()) {
       setError('请填写付款人。');
+      return;
+    }
+
+    if (onCreatePayment) {
+      try {
+        await onCreatePayment({
+          memberIds: selectedMemberIds, purchasedSessions, giftedSessions, receivableAmount, actualAmount,
+          differenceReason, payerName: payerName.trim(), paymentMethod, receiver, note: note.trim(),
+          purchaseDate: formatLocalDate(), packName: finalPackName,
+        });
+        onClose();
+      } catch (requestError) {
+        setError(requestError instanceof Error ? requestError.message : '收款保存失败，请稍后重试。');
+      }
       return;
     }
 

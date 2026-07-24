@@ -16,9 +16,11 @@ import { INITIAL_GYM_STATE } from '../initialData';
 interface DataBackupScreenProps {
   state: GymState;
   onUpdateState: (newState: GymState) => void;
+  cloudMode?: boolean;
+  onImportState?: (newState: GymState) => Promise<void>;
 }
 
-export default function DataBackupScreen({ state, onUpdateState }: DataBackupScreenProps) {
+export default function DataBackupScreen({ state, onUpdateState, cloudMode = false, onImportState }: DataBackupScreenProps) {
   const [importError, setImportError] = useState('');
   const [importSuccess, setImportSuccess] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -35,13 +37,18 @@ export default function DataBackupScreen({ state, onUpdateState }: DataBackupScr
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const text = event.target?.result as string;
       const parsedState = validateAndParseImport(text);
       
       if (parsedState) {
-        onUpdateState(parsedState);
-        setImportSuccess(true);
+        try {
+          if (cloudMode && onImportState) await onImportState(parsedState);
+          else onUpdateState(parsedState);
+          setImportSuccess(true);
+        } catch (requestError) {
+          setImportError(requestError instanceof Error ? requestError.message : '云端导入失败，请稍后重试。');
+        }
         // Clear input value so same file can be imported again
         e.target.value = '';
       } else {
@@ -69,8 +76,9 @@ export default function DataBackupScreen({ state, onUpdateState }: DataBackupScr
           数据安全与备份中心 (MVP 10)
         </h2>
         <p className="text-xs text-slate-500 mt-2 leading-relaxed font-medium">
-          为了确保您的私教工作室数据永不丢失，Fever Plus 工作台采用了完全保存在本地的加密存储策略。
-          我们建议您每周或在记录了重大缴费后，在此模块下载一份备份文件保存到个人电脑或网盘中，以防浏览器缓存被恶意清理。
+          {cloudMode
+            ? '工作台数据已保存在云端数据库。仍建议在重要收款后下载一份备份，方便独立留档。'
+            : '当前版本的数据保存在这台设备的浏览器中。建议每周或在记录重大缴费后下载一份备份，避免浏览器数据被清理。'}
         </p>
       </div>
 
@@ -105,7 +113,7 @@ export default function DataBackupScreen({ state, onUpdateState }: DataBackupScr
                 <div>
                   <span className="font-bold text-slate-800 text-xs block">2. 上传备份进行还原</span>
                   <span className="text-[10px] text-slate-400 mt-1 block font-semibold">
-                    从此前下载的备份文件中导入并完全覆盖当前的全部数据状态。
+                    {cloudMode ? '仅当云端还是空账本时可首次导入，避免误覆盖已经在用的数据。' : '从此前下载的备份文件中导入并完全覆盖当前的全部数据状态。'}
                   </span>
                 </div>
 
@@ -167,7 +175,7 @@ export default function DataBackupScreen({ state, onUpdateState }: DataBackupScr
           </div>
 
           {/* Reset button */}
-          <div className="mt-6 pt-5 border-t border-slate-100">
+          {!cloudMode && <div className="mt-6 pt-5 border-t border-slate-100">
             {!showResetConfirm ? (
               <button
                 onClick={() => setShowResetConfirm(true)}
@@ -200,7 +208,7 @@ export default function DataBackupScreen({ state, onUpdateState }: DataBackupScr
                 </div>
               </div>
             )}
-          </div>
+          </div>}
         </div>
 
       </div>

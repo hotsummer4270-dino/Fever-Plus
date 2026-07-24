@@ -3,6 +3,7 @@ import {
   Dumbbell, 
   Users, 
   ClipboardList,
+  CalendarDays,
   Database, 
   LogOut, 
   Menu, 
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react';
 import { loadGymState, restoreSessionsToPack, saveGymState } from './utils';
 import { GymState, Coach } from './types';
+import { cloudApi, cloudSyncEnabled } from './api';
 
 // Import Modular Components
 import LoginScreen from './components/LoginScreen';
@@ -19,6 +21,8 @@ import MemberManagementScreen from './components/MemberManagementScreen';
 import MemberDetailScreen from './components/MemberDetailScreen';
 import RecordsScreen, { RecordsTab } from './components/RecordsScreen';
 import DataBackupScreen from './components/DataBackupScreen';
+import AppointmentsScreen from './components/AppointmentsScreen';
+import AttentionScreen from './components/AttentionScreen';
 
 import { 
   LogClassModal, 
@@ -32,12 +36,14 @@ export default function App() {
   const [currentCoach, setCurrentCoach] = useState<Coach>('力王');
 
   // Main Active view tabs
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'members' | 'records' | 'backup'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'members' | 'appointments' | 'attention' | 'records' | 'backup'>('dashboard');
   const [recordsTab, setRecordsTab] = useState<RecordsTab>('logs');
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   // App database state
   const [gymState, setGymState] = useState<GymState>(loadGymState);
+  const [cloudReady, setCloudReady] = useState(!cloudSyncEnabled);
+  const [cloudError, setCloudError] = useState('');
 
   // Responsive mobile menu drawer state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -52,8 +58,18 @@ export default function App() {
 
   // Sync state changes to localStorage
   useEffect(() => {
-    saveGymState(gymState);
+    if (!cloudSyncEnabled) saveGymState(gymState);
   }, [gymState]);
+
+  useEffect(() => {
+    if (!cloudSyncEnabled) return;
+    let disposed = false;
+    cloudApi.bootstrap()
+      .then(({ state }) => { if (!disposed) setGymState(state); })
+      .catch((error) => { if (!disposed) setCloudError(error instanceof Error ? error.message : '云端数据加载失败。'); })
+      .finally(() => { if (!disposed) setCloudReady(true); });
+    return () => { disposed = true; };
+  }, []);
 
   // Handle successful login
   const handleLogin = (coach: Coach) => {
@@ -98,13 +114,28 @@ export default function App() {
     setSelectedMemberId(null);
   };
 
-  const handleUndoClass = () => {
+  const applyCloudState = async (request: () => Promise<{ state: GymState }>) => {
+    const { state } = await request();
+    setGymState(state);
+  };
+
+  const handleUndoClass = async () => {
     if (!pendingUndoLogId) return;
     const log = gymState.classLogs.find((item) => item.id === pendingUndoLogId);
     if (!log) return;
     const pack = gymState.coursePacks.find((item) => item.id === log.coursePackId);
     if (!pack) {
       window.alert('对应课包不存在，无法自动恢复课时。');
+      setPendingUndoLogId(null);
+      return;
+    }
+
+    if (cloudSyncEnabled) {
+      try {
+        await applyCloudState(() => cloudApi.undoClass(pendingUndoLogId));
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : '撤销消课失败，请稍后重试。');
+      }
       setPendingUndoLogId(null);
       return;
     }
@@ -123,15 +154,24 @@ export default function App() {
     ? gymState.classLogs.find((item) => item.id === pendingUndoLogId)
     : undefined;
 
-  // If not logged in, render beautiful login gate
+  if (!cloudReady) {
+    return <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4 text-sm font-semibold text-slate-500">正在加载云端账本...</main>;
+  }
+
+  if (cloudError) {
+    return <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4 text-center text-sm font-semibold text-rose-600">{cloudError}</main>;
+  }
+
+  // Cloudflare Access protects cloud mode; this choice only identifies the current coach in the ledger.
   if (!isLoggedIn) {
-    return <LoginScreen onLogin={handleLogin} />;
+    return <LoginScreen onLogin={handleLogin} cloudMode={cloudSyncEnabled} />;
   }
 
   // Sidebar Menu item lists
   const navigationItems = [
     { key: 'dashboard', name: '工作台', icon: Dumbbell },
     { key: 'members', name: '学员', icon: Users },
+    { key: 'appointments', name: '预约', icon: CalendarDays },
     { key: 'records', name: '记录', icon: ClipboardList },
     { key: 'backup', name: '数据', icon: Database },
   ] as const;
@@ -283,6 +323,10 @@ export default function App() {
             state={gymState}
             onBack={() => setSelectedMemberId(null)}
             onUpdateState={updateGymState}
+            onUpdateMember={cloudSyncEnabled ? (memberId, member) => applyCloudState(() => cloudApi.updateMember(memberId, member)) : undefined}
+            onSaveTrainingPlan={cloudSyncEnabled ? (plan) => applyCloudState(() => cloudApi.savePlan(plan)) : undefined}
+            onDeleteTrainingPlan={cloudSyncEnabled ? (planId) => applyCloudState(() => cloudApi.deletePlan(planId)) : undefined}
+            onActivateTrainingPlan={cloudSyncEnabled ? (planId) => applyCloudState(() => cloudApi.activatePlan(planId)) : undefined}
             onOpenLogClass={() => openLogClass(selectedMemberId)}
             onOpenLogPayment={() => openLogPayment(selectedMemberId)}
           />
@@ -297,6 +341,7 @@ export default function App() {
                 onOpenLogPayment={() => openLogPayment()}
                 onNavigateToMember={(mid) => setSelectedMemberId(mid)}
                 onNavigateToRecords={openRecords}
+                onOpenAttention={() => setActiveTab('attention')}
                 currentCoach={currentCoach}
               />
             )}
@@ -306,6 +351,24 @@ export default function App() {
                 state={gymState}
                 onOpenAddMember={() => setIsAddMemberOpen(true)}
                 onNavigateToMember={(mid) => setSelectedMemberId(mid)}
+              />
+            )}
+
+            {activeTab === 'appointments' && (
+              <AppointmentsScreen
+                state={gymState}
+                currentCoach={currentCoach}
+                onUpdateState={updateGymState}
+                onCreateAppointment={cloudSyncEnabled ? (appointment) => applyCloudState(() => cloudApi.createAppointment(appointment)) : undefined}
+                onCancelAppointment={cloudSyncEnabled ? (appointmentId) => applyCloudState(() => cloudApi.cancelAppointment(appointmentId)) : undefined}
+              />
+            )}
+
+            {activeTab === 'attention' && (
+              <AttentionScreen
+                state={gymState}
+                onBack={() => setActiveTab('dashboard')}
+                onNavigateToMember={(memberId) => setSelectedMemberId(memberId)}
               />
             )}
 
@@ -325,6 +388,8 @@ export default function App() {
               <DataBackupScreen
                 state={gymState}
                 onUpdateState={updateGymState}
+                cloudMode={cloudSyncEnabled}
+                onImportState={cloudSyncEnabled ? (state) => applyCloudState(() => cloudApi.importState(state)) : undefined}
               />
             )}
           </>
@@ -338,6 +403,7 @@ export default function App() {
         onClose={closeLogClass}
         state={gymState}
         onUpdateState={updateGymState}
+        onCreateClass={cloudSyncEnabled ? (log) => applyCloudState(() => cloudApi.createClass(log)) : undefined}
         currentCoach={currentCoach}
         initialMemberId={logClassMemberId}
       />
@@ -347,6 +413,7 @@ export default function App() {
         onClose={() => setIsAddMemberOpen(false)}
         state={gymState}
         onUpdateState={updateGymState}
+        onCreateMember={cloudSyncEnabled ? (member) => applyCloudState(() => cloudApi.createMember(member)) : undefined}
       />
 
       <LogPaymentModal
@@ -354,6 +421,7 @@ export default function App() {
         onClose={closeLogPayment}
         state={gymState}
         onUpdateState={updateGymState}
+        onCreatePayment={cloudSyncEnabled ? (payment) => applyCloudState(() => cloudApi.createPayment(payment)) : undefined}
         currentCoach={currentCoach}
         initialMemberId={paymentMemberId}
       />

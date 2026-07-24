@@ -1,0 +1,4 @@
+# Copy to .dev.vars for local Pages development. This file is intentionally not committed.
+APP_ENV=development
+ALLOW_LOCAL_AUTH=true
+ALLOWED_ACCESS_EMAILS=local@example.com

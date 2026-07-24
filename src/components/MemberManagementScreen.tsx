@@ -79,15 +79,17 @@ export default function MemberManagementScreen({
     return matchesSearch && matchesActivity && matchesBalance;
   });
 
-  const renderGenderIcon = (gender: 'male' | 'female') =>
+  const renderGenderIcon = (gender: 'male' | 'female' | 'unknown') =>
     gender === 'female' ? (
       <span className="flex h-6 w-6 items-center justify-center rounded-md bg-rose-50 text-rose-600" title="女性">
         <Venus className="h-3.5 w-3.5" />
       </span>
-    ) : (
+    ) : gender === 'male' ? (
       <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-50 text-blue-600" title="男性">
         <Mars className="h-3.5 w-3.5" />
       </span>
+    ) : (
+      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 text-slate-500" title="性别未登记">?</span>
     );
 
   return (

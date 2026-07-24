@@ -3,9 +3,10 @@ import { ArrowRight, Dumbbell, Eye, EyeOff, Lock } from 'lucide-react';
 
 interface LoginScreenProps {
   onLogin: (coach: '力王' | '花花') => void;
+  cloudMode?: boolean;
 }
 
-export default function LoginScreen({ onLogin }: LoginScreenProps) {
+export default function LoginScreen({ onLogin, cloudMode = false }: LoginScreenProps) {
   const [selectedCoach, setSelectedCoach] = useState<'力王' | '花花'>('力王');
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
@@ -13,7 +14,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (pin === '8888' || pin === '6666') {
+    if (cloudMode || pin === '8888' || pin === '6666') {
       onLogin(selectedCoach);
       return;
     }
@@ -61,7 +62,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             </div>
           </fieldset>
 
-          <div>
+          {!cloudMode && <div>
             <label htmlFor="pin-input" className="mb-2 block text-sm font-bold text-slate-700">PIN 码</label>
             <div className="relative">
               <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -89,7 +90,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               </button>
             </div>
             {error && <p className="mt-2 text-sm font-semibold text-rose-600">{error}</p>}
-          </div>
+          </div>}
 
           <button
             type="submit"
@@ -101,7 +102,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
         </form>
 
         <p className="mt-6 border-t border-slate-100 pt-4 text-center text-xs text-slate-400">
-          当前版本的数据保存在这台设备的浏览器中
+          {cloudMode ? '已通过受保护的云端工作台验证，请选择本次记录的教练。' : '当前版本的数据保存在这台设备的浏览器中'}
         </p>
       </section>
     </main>

@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fever-plus-local",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-07-10",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "fever-plus-local",
+      "database_id": "local-d1-placeholder"
+    }
+  ]
+}

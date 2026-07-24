@@ -4,7 +4,7 @@ export interface Member {
   id: string;
   name: string;
   phone: string;
-  gender: 'male' | 'female';
+  gender: 'male' | 'female' | 'unknown';
   avatar: string;
   joinDate: string;
   note: string;
@@ -80,6 +80,17 @@ export interface TrainingPlan {
   isActive: boolean;
 }
 
+export interface Appointment {
+  id: string;
+  memberId: string;
+  memberName: string;
+  coach: Coach;
+  startAt: string;
+  duration: number;
+  status: 'confirmed' | 'cancelled';
+  note: string;
+}
+
 export interface GymState {
   schemaVersion?: number;
   members: Member[];
@@ -87,4 +98,5 @@ export interface GymState {
   paymentLogs: PaymentLog[];
   classLogs: ClassLog[];
   trainingPlans: TrainingPlan[];
+  appointments: Appointment[];
 }
